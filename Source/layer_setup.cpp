@@ -138,6 +138,7 @@ VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_CreateDevice(VkPhysicalDevice gpu, con
 	deviceTable.CreateRenderPass = (PFN_vkCreateRenderPass)next_GetDeviceProcAddr(*pDevice, "vkCreateRenderPass");
 	deviceTable.CmdBeginRenderPass = (PFN_vkCmdBeginRenderPass)next_GetDeviceProcAddr(*pDevice, "vkCmdBeginRenderPass");
 	deviceTable.CmdEndRenderPass = (PFN_vkCmdEndRenderPass)next_GetDeviceProcAddr(*pDevice, "vkCmdEndRenderPass");
+	deviceTable.QueueSubmit = (PFN_vkQueueSubmit)next_GetDeviceProcAddr(*pDevice, "vkQueueSubmit");
 	deviceTable.QueuePresentKHR = (PFN_vkQueuePresentKHR)next_GetDeviceProcAddr(*pDevice, "vkQueuePresentKHR");
 
 	deviceTable.AllocateMemory = (PFN_vkAllocateMemory)next_GetDeviceProcAddr(*pDevice, "vkAllocateMemory");
@@ -173,15 +174,7 @@ VkResult Layer_EnumerateInstanceVersion(const VkEnumerateInstanceVersionChain* p
 // todo: implement layerGetPhysicalDeviceProcAddr if necessary
 // https://github.dev/crosire/reshade/tree/main/source/vulkan
 // https://github.dev/baldurk/renderdoc/tree/v1.x/renderdoc/driver/vulkan
-VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL Layer_GetInstanceProcAddr(VkInstance instance, const char* pName) {	
-	
-	PFN_vkVoidFunction voidFunc = nullptr;
-	if (instance != nullptr) {
-		scoped_lock l(global_lock);
-		voidFunc = instance_dispatch[GetKey(instance)].GetInstanceProcAddr(instance, pName);
-	}
-	logPrint(std::format("[DEBUG] Layer GetInstanceProcAddr {} using {}, result = {}", pName, (void*)instance, (void*)voidFunc));
-
+VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL Layer_GetInstanceProcAddr(VkInstance instance, const char* pName) {
 	HOOK_PROC_FUNC(CreateInstance);
 	HOOK_PROC_FUNC(DestroyInstance);
 	HOOK_PROC_FUNC(CreateDevice);
@@ -201,6 +194,9 @@ VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL Layer_GetInstanceProcAddr(VkInstan
 	HOOK_PROC_FUNC(CmdBeginRenderPass);
 	HOOK_PROC_FUNC(CmdEndRenderPass);
 
+	HOOK_PROC_FUNC(QueueSubmit);
+	HOOK_PROC_FUNC(QueuePresentKHR);
+
 	// Self-intercept for compatibility
 	HOOK_PROC_FUNC(GetInstanceProcAddr);
 
@@ -210,54 +206,29 @@ VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL Layer_GetInstanceProcAddr(VkInstan
 	}
 }
 
-
-VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_AllocateMemory(VkDevice device, const VkMemoryAllocateInfo* pAllocateInfo, const VkAllocationCallbacks* pAllocator, VkDeviceMemory* pMemory) {
-	logPrint("Allocated memory!");
-	scoped_lock l(global_lock);
-	return device_dispatch[GetKey(device)].AllocateMemory(device, pAllocateInfo, pAllocator, pMemory);
-}
-
 VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL Layer_GetDeviceProcAddr(VkDevice device, const char* pName) {
-	PFN_vkVoidFunction voidFunc = nullptr;
-	if (device != nullptr) {
+	HOOK_PROC_FUNC(CreateDevice);
+	HOOK_PROC_FUNC(DestroyDevice);
+
+	HOOK_PROC_FUNC(CreateImage);
+	HOOK_PROC_FUNC(CreateImageView);
+	HOOK_PROC_FUNC(UpdateDescriptorSets);
+	HOOK_PROC_FUNC(CmdBindDescriptorSets);
+	HOOK_PROC_FUNC(CreateRenderPass);
+	HOOK_PROC_FUNC(CmdBeginRenderPass);
+	HOOK_PROC_FUNC(CmdEndRenderPass);
+
+	HOOK_PROC_FUNC(QueueSubmit);
+	HOOK_PROC_FUNC(QueuePresentKHR);
+
+	HOOK_PROC_FUNC(EnumeratePhysicalDevices);
+
+	// Required to self-intercept for compatibility
+	HOOK_PROC_FUNC(GetDeviceProcAddr);
+
+	{
 		scoped_lock l(global_lock);
-		voidFunc = device_dispatch[GetKey(device)].GetDeviceProcAddr(device, pName);
-	}
-	if (vkSharedDevice == device && false) {
-		HOOK_PROC_FUNC(CreateDevice);
-		HOOK_PROC_FUNC(DestroyDevice);
-
-		// Required to self-intercept for compatibility
-		HOOK_PROC_FUNC(GetDeviceProcAddr);
-
-
-		return SteamVRHook_GetDeviceProcAddrExtra(device, pName);
-	}
-	else {
-		logPrint(std::format("[DEBUG] Layer GetDeviceProcAddr {} using {}, result = {}", pName, (void*)device, (void*)voidFunc));
-
-		HOOK_PROC_FUNC(CreateDevice);
-		HOOK_PROC_FUNC(DestroyDevice);
-
-		HOOK_PROC_FUNC(AllocateMemory);
-
-		HOOK_PROC_FUNC(CreateImage);
-		HOOK_PROC_FUNC(CreateImageView);
-		HOOK_PROC_FUNC(UpdateDescriptorSets);
-		HOOK_PROC_FUNC(CmdBindDescriptorSets);
-		HOOK_PROC_FUNC(CreateRenderPass);
-		HOOK_PROC_FUNC(CmdBeginRenderPass);
-		HOOK_PROC_FUNC(CmdEndRenderPass);
-
-		HOOK_PROC_FUNC(EnumeratePhysicalDevices);
-
-		// Required to self-intercept for compatibility
-		HOOK_PROC_FUNC(GetDeviceProcAddr);
-
-		{
-			scoped_lock l(global_lock);
-			return device_dispatch[GetKey(device)].GetDeviceProcAddr(device, pName);
-		}
+		return device_dispatch[GetKey(device)].GetDeviceProcAddr(device, pName);
 	}
 }
 

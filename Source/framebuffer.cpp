@@ -17,7 +17,7 @@ VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_CreateImage(VkDevice device, const VkI
 	scoped_lock l(global_lock);
 	VkResult result = device_dispatch[GetKey(device)].CreateImage(device, pCreateInfo, pAllocator, pImage);
 	
-	if (findFramebuffer && pCreateInfo->extent.width >= pCreateInfo->extent.height && pCreateInfo->extent.width != 0 && pCreateInfo->extent.height != 0) {
+	if (pCreateInfo->extent.width >= pCreateInfo->extent.height && pCreateInfo->extent.width != 0 && pCreateInfo->extent.height != 0) {
 		allImageResolutions[*pImage] = VkExtent2D{ pCreateInfo->extent.width, pCreateInfo->extent.height };
 	}
 
@@ -51,7 +51,7 @@ VK_LAYER_EXPORT void VKAPI_CALL Layer_CmdBindDescriptorSets(VkCommandBuffer comm
 	scoped_lock l(global_lock);
 	device_dispatch[GetKey(commandBuffer)].CmdBindDescriptorSets(commandBuffer, pipelineBindPoint, layout, firstSet, descriptorSetCount, pDescriptorSets, dynamicOffsetCount, pDynamicOffsets);
 
-	if (tryMatchingUnscaledImages && descriptorSetCount == 1) {
+	if (tryMatchingUnscaledImages && (descriptorSetCount == 1)) {
 		assert(potentialUnscaledImages.find(pDescriptorSets[0]) != potentialUnscaledImages.end());
 		VkExtent2D imageResolution = allImageResolutions[potentialUnscaledImages[pDescriptorSets[0]]];
 		if (imageResolution.width != 0 && imageResolution.height != 0) {
@@ -100,9 +100,12 @@ VK_LAYER_EXPORT void VKAPI_CALL Layer_CmdEndRenderPass(VkCommandBuffer commandBu
 			logPrint(std::string("The native resolution of the game's current rendering was guessed to be ") + std::to_string(biggestResolution.width) + "x" + std::to_string(biggestResolution.height));
 			if (biggestResolution.width != 0 && biggestResolution.height != 0) {
 				findFramebuffer = false;
-				fbWidth = biggestResolution.width;
-				fbHeight = biggestResolution.height;
+				//fbWidth = biggestResolution.width;
+				//fbHeight = biggestResolution.height;
+				fbWidth = 1920;
+				fbHeight = 1080;
 				RND_InitRendering();
+				XR_BeginSession();
 
 				//leftEyeResources.width = biggestResolution.width;
 				//leftEyeResources.height = biggestResolution.height;
@@ -122,6 +125,7 @@ VK_LAYER_EXPORT void VKAPI_CALL Layer_CmdEndRenderPass(VkCommandBuffer commandBu
 			for (const VkImage image : unscaledImages) {
 				VkExtent2D imageResolution = allImageResolutions[image];
 				if (imageResolution.width == fbWidth && imageResolution.height == fbHeight) {
+					RND_RenderFrame(XR_NULL_HANDLE, commandBuffer, image);
 					//sideTextureResources* currSide = currSwapSide == SWAP_SIDE::LEFT ? &leftEyeResources : &rightEyeResources;
 					//copyTexture(commandBuffer, image, currSide);
 					//increaseTimeSignature(&currSide->copiedTime, &currSide->copiedTimeCounter);

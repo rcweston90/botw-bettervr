@@ -30,6 +30,14 @@
 #include <fstream>
 #include <bitset>
 
+#include <glm/glm.hpp>
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/gtc/matrix_access.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/projection.hpp>
+#include <glm/gtx/quaternion.hpp>
+#include <glm/gtc/constants.hpp>
+
 #undef VK_LAYER_EXPORT
 #if defined(WIN32)
 #define VK_LAYER_EXPORT extern "C" __declspec(dllexport)

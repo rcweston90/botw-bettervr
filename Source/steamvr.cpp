@@ -21,7 +21,7 @@ extern PFN_vkGetInstanceProcAddr saved_GetInstanceProcAddr;
 extern PFN_vkGetDeviceProcAddr saved_GetDeviceProcAddr;
 
 // Resolve macros
-#define FUNC_LOGGING_LEVEL 2
+#define FUNC_LOGGING_LEVEL 0
 
 #if FUNC_LOGGING_LEVEL == 2
 //#define LOG_FUNC_RESOLVE(resolveFuncType, resolveFunc, object, name) \
@@ -88,8 +88,10 @@ void VKAPI_CALL SteamVRHook_DestroyDevice(VkDevice device, const VkAllocationCal
 VkResult VKAPI_CALL SteamVRHook_EnumeratePhysicalDevices(VkInstance instance, uint32_t* pPhysicalDeviceCount, VkPhysicalDevice* pPhysicalDevices) {
 	VkResult result = orig_EnumeratePhysicalDevices(instance, pPhysicalDeviceCount, pPhysicalDevices);
 	logPrint(std::format("Enumerated {} physical devices in SteamVR with this instance {}", (uint32_t)*pPhysicalDeviceCount, (void*)instance));
-	for (uint32_t i = 0; i < *pPhysicalDeviceCount; i++) {
-		logPrint(std::format(" - {}", (void*)pPhysicalDevices[i]));
+	if (pPhysicalDevices != nullptr) {
+		for (uint32_t i = 0; i < *pPhysicalDeviceCount; i++) {
+			logPrint(std::format(" - {}", (void*)pPhysicalDevices[i]));
+		}
 	}
 	return result;
 }
@@ -105,7 +107,7 @@ PFN_vkVoidFunction VKAPI_CALL SteamVRHook_GetInstanceProcAddr(VkInstance instanc
 	HOOK_STEAMVR_FUNC(DestroyInstance, top_InstanceProcAddr(instance, pName));
 	HOOK_STEAMVR_FUNC(DestroyDevice, top_InstanceProcAddr(instance, pName));
 
-	HOOK_STEAMVR_FUNC(EnumeratePhysicalDevices, top_InstanceProcAddr(instance, pName));
+	HOOK_STEAMVR_FUNC(EnumeratePhysicalDevices, Layer_EnumeratePhysicalDevices);
 
 	HOOK_STEAMVR_FUNC(GetInstanceProcAddr, saved_GetInstanceProcAddr);
 	HOOK_STEAMVR_FUNC(GetDeviceProcAddr, SteamVRHook_GetDeviceProcAddr);
@@ -141,30 +143,6 @@ PFN_vkVoidFunction VKAPI_CALL SteamVRHook_GetInstanceProcAddr(VkInstance instanc
 			resolvedUsing = std::format("use device dispatch table", (void*)topVkInstance);
 		}
 	}
-	/*else if (topVkInstance != nullptr) {
-		funcRet = top_InstanceProcAddr(topVkInstance, pName);
-		resolvedUsing = std::format("topVkInstance={}, saved_GetInstanceProcAddr", (void*)topVkInstance, (void*)vkSharedInstance);
-	}
-	else if (vkSharedDevice == nullptr) {
-		topVkInstance = instance;
-		funcRet = top_InstanceProcAddr(topVkInstance, pName);
-		resolvedUsing = std::format("didn't know vkInstance={}, saved_GetInstanceProcAddr", (void*)topVkInstance);
-	}
-	else if (vkSharedDevice != nullptr) {
-		topVkInstance = instance;
-		funcRet = top_InstanceProcAddr(topVkInstance, pName);
-		resolvedUsing = std::format("didn't know vkInstance={}, saved_GetInstanceProcAddr", (void*)topVkInstance);
-	}*/
-	else {
-		//logDebugPrintAddr(std::format("[DEBUG] TopInstance={} SharedInstance={} SharedDevice={} ParameterInstance={}", (void*)topVkInstance, (void*)vkSharedInstance, (void*)vkSharedDevice, (void*)instance));
-		//for (const auto& steamInstance : steamInstances) {
-		//	logDebugPrintAddr(std::format(" - VkInstance = {}, address = {}", (void*)steamInstance, (void*)saved_GetInstanceProcAddr(steamInstance, pName)));
-		//}
-		//for (const auto& steamDevice : steamDevices) {
-		//	logDebugPrintAddr(std::format(" - VkDevice = {}, address = {}", (void*)steamDevice, (void*)saved_GetDeviceProcAddr(steamDevice, pName)));
-		//}
-		//logDebugPrintAddr(std::format("[ERROR] Using {}: vkGet*ProcAddr(name=\"{}\") returned {}", resolvedUsing, pName, (void*)funcRet));
-	}
 
 #if FUNC_LOGGING_LEVEL == 2
 	if (funcRet == nullptr) {
@@ -182,6 +160,7 @@ PFN_vkVoidFunction VKAPI_CALL SteamVRHook_GetInstanceProcAddr(VkInstance instanc
 	return funcRet;
 }
 
+// todo: don't think this is used
 PFN_vkVoidFunction VKAPI_CALL SteamVRHook_GetDeviceProcAddr(VkDevice device, const char* pName) {
 	PFN_vkGetDeviceProcAddr top_DeviceProcAddr = reinterpret_cast<PFN_vkGetDeviceProcAddr>(GetProcAddress(reinterpret_cast<HMODULE>(vulkanModule), "vkGetDeviceProcAddr"));
 

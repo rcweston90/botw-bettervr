@@ -4,6 +4,8 @@ XrInstance xrSharedInstance = XR_NULL_HANDLE;
 XrSystemId xrSharedSystemId = XR_NULL_SYSTEM_ID;
 XrSession xrSharedSession = XR_NULL_HANDLE;
 
+XrSpace xrSpace = XR_NULL_HANDLE;
+
 XrDebugUtilsMessengerEXT xrDebugMessengerHandle = XR_NULL_HANDLE;
 //XrGraphicsBindingVulkanKHR xrVulkanBindings = {};
 //VkSurfaceKHR xrSurfaceHandle = XR_NULL_HANDLE;
@@ -126,6 +128,7 @@ void XR_initInstance() {
 	// Print configuration used, mostly for debugging purposes
 	logPrint("Acquired system to be used:");
 	logPrint(std::string(" - System Name: ") + xrSystemProperties.systemName);
+	logPrint(std::string(" - Supports Mutable FOV: ") + (xrSupportsFovMutable ? "Yes" : "No"));
 	logPrint(std::string(" - Supports Orientation Tracking: ") + (xrSystemProperties.trackingProperties.orientationTracking ? "Yes" : "No"));
 	logPrint(std::string(" - Supports Positional Tracking: ") + (xrSystemProperties.trackingProperties.positionTracking ? "Yes" : "No"));
 	logPrint(std::string(" - Supports Max Swapchain Width: ") + std::to_string(xrSystemProperties.graphicsProperties.maxSwapchainImageWidth));
@@ -247,8 +250,8 @@ std::array<XrViewConfigurationView, 2> XR_CreateViewConfiguration() {
 	}
 	std::array<XrViewConfigurationView, 2> xrViewConf = { XrViewConfigurationView{ XR_TYPE_VIEW_CONFIGURATION_VIEW } , XrViewConfigurationView{ XR_TYPE_VIEW_CONFIGURATION_VIEW } };
 	checkXRResult(xrEnumerateViewConfigurationViews(xrSharedInstance, xrSharedSystemId, XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO, eyeViewsConfigurationCount, &eyeViewsConfigurationCount, xrViewConf.data()), "Can't get individual views for stereo view available!");
+	
 	logPrint("Successfully created the OpenXR view configuration!");
-
 	return xrViewConf;
 }
 
@@ -271,4 +274,23 @@ XrSession XR_CreateSession(VkInstance vkInstance, VkDevice vkDevice, VkPhysicalD
 	
 	logPrint("Successfully created the OpenXR session!");
 	return xrSharedSession;
+}
+
+XrSpace XR_CreateSpace() {
+	constexpr XrPosef xrIdentityPose = { .orientation = {.x=0,.y=0,.z=0,.w=1}, .position = {.x=0,.y=0,.z=0} };
+
+	XrReferenceSpaceCreateInfo spaceCreateInfo = { XR_TYPE_REFERENCE_SPACE_CREATE_INFO };
+	spaceCreateInfo.referenceSpaceType = XR_REFERENCE_SPACE_TYPE_STAGE;
+	spaceCreateInfo.poseInReferenceSpace = xrIdentityPose;
+	checkXRResult(xrCreateReferenceSpace(xrSharedSession, &spaceCreateInfo, &xrSpace), "Failed to create reference space!");
+	
+	logPrint("Successfully created OpenXR reference space!");
+	return xrSpace;
+}
+
+void XR_BeginSession() {
+	XrSessionBeginInfo sessionBeginInfo = { XR_TYPE_SESSION_BEGIN_INFO };
+	sessionBeginInfo.primaryViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
+	checkXRResult(xrBeginSession(xrSharedSession, &sessionBeginInfo), "Failed to begin OpenXR session!");
+	logPrint("Successfully begun OpenXR session!");
 }
