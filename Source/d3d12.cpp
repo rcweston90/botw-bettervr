@@ -150,7 +150,7 @@ ComPtr<ID3D12Resource> D3D12Util_CreateConstantBuffer(D3D12_HEAP_TYPE heapType, 
 }
 
 
-void D3D12_CreateShaderPipeline(DXGI_FORMAT swapchainFormat, uint32_t swapchainCount) {
+void D3D12_CreateShaderPipeline(DXGI_FORMAT swapchainFormat, uint32_t swapchainWidth, uint32_t swapchainHeight) {
 	auto compileShader = [](const char* sourceHLSL, const char* entryPoint, const char* version) {
 		DWORD shaderCompileFlags = D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR | D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_WARNINGS_ARE_ERRORS;
 #ifdef _DEBUG
@@ -395,20 +395,6 @@ HANDLE D3D12_CreateSharedTexture(uint32_t width, uint32_t height, DXGI_FORMAT fo
 	srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 	srvDesc.Texture2D.MipLevels = 1;
 	d3d12Device->CreateShaderResourceView(sharedTexture.resource.Get(), &srvDesc, srvHandle);
-
-	//D3D12_CommandContext<true> barrierContext([sharedTexture](ID3D12GraphicsCommandList* cmdList) {
-	//	D3D12_RESOURCE_BARRIER renderBarrier[] = {
-	//		{
-	//			.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
-	//			.Transition = {
-	//				.pResource = sharedTexture.resource.Get(),
-	//				.StateBefore = D3D12_RESOURCE_STATE_COMMON,
-	//				.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-	//			}
-	//		}
-	//	};
-	//	cmdList->ResourceBarrier(1, renderBarrier);
-	//});
 	
 	checkHResult(d3d12Device->CreateSharedHandle(sharedTexture.resource.Get(), nullptr, GENERIC_ALL, nullptr, &sharedTexture.sharedHandle));
 	

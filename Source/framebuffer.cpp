@@ -152,8 +152,8 @@ VK_LAYER_EXPORT void VKAPI_CALL Layer_CmdEndRenderPass(VkCommandBuffer commandBu
 			// If framebuffer was found and it's (one of) the last render pass of the frame, copy any texture buffers that match the unscaled viewport resolution
 			checkAssert(unscaledImages.size());			
 			for (const VkImage& image : unscaledImages) {
-				//logPrint(std::format("Pick image {}", (void*)image));				
-				RND_RenderFrame(XR_NULL_HANDLE, commandBuffer, image);
+				//logPrint(std::format("Pick image {}", (void*)image));
+				RND_RenderFrame(commandBuffer, image);
 			}
 
 			tryMatchingUnscaledImages = false;

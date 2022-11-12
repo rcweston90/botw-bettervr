@@ -72,7 +72,7 @@ void XR_BeginSession();
 XrSpace XR_CreateSpace();
 
 void D3D12_CreateInstance(D3D_FEATURE_LEVEL minFeatureLevel, LUID adapterLUID);
-void D3D12_CreateShaderPipeline(DXGI_FORMAT swapchainFormat, uint32_t swapchainCount);
+void D3D12_CreateShaderPipeline(DXGI_FORMAT swapchainFormat, uint32_t swapchainWidth, uint32_t swapchainHeight);
 HANDLE D3D12_CreateSharedFence();
 HANDLE D3D12_CreateSharedTexture(uint32_t width, uint32_t height, DXGI_FORMAT format);
 void D3D12_RenderFrameToSwapchain(uint32_t textureIdx, ID3D12Resource* swapchain, uint32_t swapchainWidth, uint32_t swapchainHeight);
@@ -86,7 +86,7 @@ void RNDVK_CopyImage(VkCommandBuffer currCmdBuffer, VkImage srcImage, VkImage ds
 // rendering functions
 void RND_InitRendering(uint32_t srcWidth, uint32_t srcHeight, VkFormat srcFormat);
 void RND_BeginFrame();
-void RND_RenderFrame(XrSwapchain xrSwapchain, VkCommandBuffer copyCmdBuffer, VkImage copyImage);
+void RND_RenderFrame(VkCommandBuffer copyCmdBuffer, VkImage copyImage);
 void RND_EndFrame();
 VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_QueueSubmit(VkQueue queue, uint32_t submitCount, const VkSubmitInfo* pSubmits, VkFence fence);
 VK_LAYER_EXPORT VkResult VKAPI_CALL Layer_QueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPresentInfo);

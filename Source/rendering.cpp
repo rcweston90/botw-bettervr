@@ -115,7 +115,7 @@ void RND_InitRendering(uint32_t srcWidth, uint32_t srcHeight, VkFormat srcFormat
 	xrSwapchainImages[0] = RND_EnumerateSwapchainImages(xrSwapchains[0]);
 	xrSwapchainImages[1] = RND_EnumerateSwapchainImages(xrSwapchains[1]);
 
-	D3D12_CreateShaderPipeline(swapchainFormat, 2/*unused*/);
+	D3D12_CreateShaderPipeline(swapchainFormat, xrViewConfs[0].recommendedImageRectWidth, xrViewConfs[0].recommendedImageRectHeight);
 
 	// Initialize shared textures and fences
 	vkSharedFence = D3D12_CreateSharedFence();
@@ -136,6 +136,8 @@ void RND_UpdateViews() {
 	checkXRResult(xrLocateViews(xrSessionHandle, &viewLocateInfo, &frameViewState, (uint32_t)frameViews.size(), &viewCountOutput, frameViews.data()), "Failed to locate views in OpenXR!");
 	assert(viewCountOutput == 2);
 }
+
+uint32_t alternateIndex = 0;
 
 void RND_BeginFrame() {
 	checkAssert(xrSessionHandle != XR_NULL_HANDLE, "Tried to begin frame without initializing rendering first!");
@@ -159,27 +161,31 @@ void RND_BeginFrame() {
 
 // todo: Call xrLocateSpace maybe
 
-uint32_t alternateIndex = 0;
-
-void RND_RenderFrame(XrSwapchain xrSwapchain, VkCommandBuffer copyCmdBuffer, VkImage copyImage) {
+void RND_RenderFrame(VkCommandBuffer copyCmdBuffer, VkImage copyImage) {
+	//checkAssert(beganRendering, "Tried to render frame without beginning frame first? todo: remove!");
 	if (!beganRendering) return;
-
-	xrSwapchain = xrSwapchains[alternateIndex];
 	
-	if (currRuntime == OpenXRRuntime::OCULUS_RUNTIME ? true/*todo: find out why oculus always returns false in shouldRender!*/ : frameState.shouldRender) {
+	auto& currSwapchain = xrSwapchains[alternateIndex];
+	auto& currSwapchainImages = xrSwapchainImages[alternateIndex];
+	auto& currViewConfiguration = xrViewConfs[alternateIndex];
+	auto& currViewProjection = frameProjectionViews[alternateIndex];
+	uint32_t currSwapchainWidth = xrViewConfs[alternateIndex].recommendedImageRectWidth;
+	uint32_t currSwapchainHeight = xrViewConfs[alternateIndex].recommendedImageRectHeight;
+	
+	if (currRuntime == OpenXRRuntime::OCULUS_RUNTIME ? true/*todo: find out why oculus always returns false in shouldRender*/ : frameState.shouldRender) {
 		RND_UpdateViews();
-		if (frameViewState.viewStateFlags & (XR_VIEW_STATE_POSITION_VALID_BIT | XR_VIEW_STATE_ORIENTATION_VALID_BIT)) {
-			uint32_t swapchainImageIndex = 0;
-			checkXRResult(xrAcquireSwapchainImage(xrSwapchain, NULL, &swapchainImageIndex), "Can't acquire OpenXR swapchain image!");
+		if (frameViewState.viewStateFlags & (XR_VIEW_STATE_POSITION_VALID_BIT | XR_VIEW_STATE_ORIENTATION_VALID_BIT) || true) {
+			uint32_t acquiredSwapchainImageIdx = 0;
+			checkXRResult(xrAcquireSwapchainImage(currSwapchain, NULL, &acquiredSwapchainImageIdx), "Can't acquire OpenXR swapchain image!");
 
 			XrSwapchainImageWaitInfo waitSwapchainInfo = { XR_TYPE_SWAPCHAIN_IMAGE_WAIT_INFO };
 			waitSwapchainInfo.timeout = XR_INFINITE_DURATION;
-			if (XrResult waitResult = xrWaitSwapchainImage(xrSwapchain, &waitSwapchainInfo); waitResult == XR_TIMEOUT_EXPIRED && XR_SUCCEEDED(waitResult)) {
+			if (XrResult waitResult = xrWaitSwapchainImage(currSwapchain, &waitSwapchainInfo); waitResult == XR_TIMEOUT_EXPIRED && XR_SUCCEEDED(waitResult)) {
 				checkXRResult(waitResult, "Failed to wait for swapchain image!");
 			}
 			
 			RNDVK_CopyImage(copyCmdBuffer, copyImage, vkSharedImages[alternateIndex]);
-			D3D12_RenderFrameToSwapchain(alternateIndex, xrSwapchainImages[alternateIndex][swapchainImageIndex].texture, xrViewConfs[0].recommendedImageRectWidth, xrViewConfs[0].recommendedImageRectHeight);
+			D3D12_RenderFrameToSwapchain(alternateIndex, currSwapchainImages[acquiredSwapchainImageIdx].texture, currSwapchainWidth, currSwapchainHeight);
 
 			float leftHalfFOV = glm::degrees(frameViews[0].fov.angleLeft);
 			float rightHalfFOV = glm::degrees(frameViews[0].fov.angleRight);
@@ -188,33 +194,51 @@ void RND_RenderFrame(XrSwapchain xrSwapchain, VkCommandBuffer copyCmdBuffer, VkI
 
 			float horizontalHalfFOV = (float)(abs(frameViews[0].fov.angleLeft) + abs(frameViews[0].fov.angleRight)) * 0.5f;
 			float verticalHalfFOV = (float)(abs(frameViews[0].fov.angleUp) + abs(frameViews[0].fov.angleDown)) * 0.5f;
+			
+			currViewProjection.pose = frameViews[alternateIndex].pose;
+			currViewProjection.fov = frameViews[alternateIndex].fov;
+			currViewProjection.fov.angleLeft = -horizontalHalfFOV;
+			currViewProjection.fov.angleRight = horizontalHalfFOV;
+			currViewProjection.fov.angleUp = verticalHalfFOV;
+			currViewProjection.fov.angleDown = -verticalHalfFOV;
+			currViewProjection.subImage.swapchain = currSwapchain;
+			currViewProjection.subImage.imageRect = {
+				.offset = {0, 0},
+				.extent = {
+					.width = (int32_t)xrViewConfs[alternateIndex].recommendedImageRectWidth,
+					.height = (int32_t)xrViewConfs[alternateIndex].recommendedImageRectHeight
+				}
+			};
+			currViewProjection.subImage.imageArrayIndex = 0;
 
-			for (size_t i = 0; i < frameProjectionViews.size(); i++) {
-				frameProjectionViews[i].pose = frameViews[i].pose;
-				frameProjectionViews[i].fov = frameViews[i].fov;
-				frameProjectionViews[i].fov.angleLeft = -horizontalHalfFOV;
-				frameProjectionViews[i].fov.angleRight = horizontalHalfFOV;
-				frameProjectionViews[i].fov.angleUp = verticalHalfFOV;
-				frameProjectionViews[i].fov.angleDown = -verticalHalfFOV;
-				frameProjectionViews[i].subImage.swapchain = xrSwapchain;
-				frameProjectionViews[i].subImage.imageRect = {
-					.offset = {0, 0},
-					.extent = {
-						.width = (int32_t)xrViewConfs[i].recommendedImageRectWidth,
-						.height = (int32_t)xrViewConfs[i].recommendedImageRectHeight
-					}
-				};
-				frameProjectionViews[i].subImage.imageArrayIndex = 0;
-			}
+			//for (size_t i = 0; i < frameProjectionViews.size(); i++) {
+			//	frameProjectionViews[i].pose = frameViews[i].pose;
+			//	frameProjectionViews[i].fov = frameViews[i].fov;
+			//	frameProjectionViews[i].fov.angleLeft = -horizontalHalfFOV;
+			//	frameProjectionViews[i].fov.angleRight = horizontalHalfFOV;
+			//	frameProjectionViews[i].fov.angleUp = verticalHalfFOV;
+			//	frameProjectionViews[i].fov.angleDown = -verticalHalfFOV;
+			//	frameProjectionViews[i].subImage.swapchain = currSwapchain;
+			//	frameProjectionViews[i].subImage.imageRect = {
+			//		.offset = {0, 0},
+			//		.extent = {
+			//			.width = (int32_t)xrViewConfs[i].recommendedImageRectWidth,
+			//			.height = (int32_t)xrViewConfs[i].recommendedImageRectHeight
+			//		}
+			//	};
+			//	frameProjectionViews[i].subImage.imageArrayIndex = 0;
+			//}
 			
 			frameRenderLayer.layerFlags = NULL;
 			frameRenderLayer.space = xrSpaceHandle;
+			//frameRenderLayer.viewCount = (uint32_t)1;
+			//frameRenderLayer.views = &currViewProjection;
 			frameRenderLayer.viewCount = (uint32_t)frameProjectionViews.size();
 			frameRenderLayer.views = frameProjectionViews.data();
 
 			frameLayers.push_back(reinterpret_cast<XrCompositionLayerBaseHeader*>(&frameRenderLayer));
 		}
-		checkXRResult(xrReleaseSwapchainImage(xrSwapchain, NULL), "Failed to release OpenXR swapchain image!");
+		checkXRResult(xrReleaseSwapchainImage(currSwapchain, NULL), "Failed to release OpenXR swapchain image!");
 	}
 	alternateIndex = alternateIndex == 0 ? 1 : 0;
 }
