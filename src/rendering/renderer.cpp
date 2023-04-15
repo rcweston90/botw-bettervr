@@ -8,7 +8,8 @@ RND_Renderer::RND_Renderer(XrSession xrSession): m_session(xrSession) {
     m_sessionCreateInfo.primaryViewConfigurationType = XR_VIEW_CONFIGURATION_TYPE_PRIMARY_STEREO;
     checkXRResult(xrBeginSession(VRManager::instance().XR->GetSession(), &m_sessionCreateInfo), "Failed to begin OpenXR session!");
 
-    m_presentPipeline = std::make_unique<RND_D3D12::PresentPipeline>();
+    m_presentPipelines[std::to_underlying(OpenXR::EyeSide::LEFT)] = std::make_unique<RND_D3D12::PresentPipeline>();
+    m_presentPipelines[std::to_underlying(OpenXR::EyeSide::RIGHT)] = std::make_unique<RND_D3D12::PresentPipeline>();
 }
 
 RND_Renderer::~RND_Renderer() {
@@ -46,7 +47,7 @@ void RND_Renderer::EndFrame() {
     VRManager::instance().XR->GetSwapchain(OpenXR::EyeSide::LEFT)->StartRendering();
     VRManager::instance().XR->GetSwapchain(OpenXR::EyeSide::RIGHT)->StartRendering();
 
-    checkAssert(m_textures.size() % 2 == 0, "Did you intend on rendering an unequal amount of textures for each eye.");
+    checkAssert(m_textures[std::to_underlying(OpenXR::EyeSide::LEFT)].size() == m_textures[std::to_underlying(OpenXR::EyeSide::RIGHT)].size(), "Did you intend on rendering an unequal amount of textures for each eye.");
 
     if (m_frameState.shouldRender) {
         XrCompositionLayerProjection frameRenderLayer = { XR_TYPE_COMPOSITION_LAYER_PROJECTION };
@@ -61,13 +62,13 @@ void RND_Renderer::EndFrame() {
                 ID3D12Device* device = VRManager::instance().D3D12->GetDevice();
                 ID3D12CommandQueue* queue = VRManager::instance().D3D12->GetCommandQueue();
                 ID3D12CommandAllocator* allocator = VRManager::instance().D3D12->GetFrameAllocator();
-                RND_D3D12::CommandContext<false> renderSharedTexture(device, queue, allocator, [this, texture, swapchain](ID3D12GraphicsCommandList* cmdList) {
+                RND_D3D12::CommandContext<false> renderSharedTexture(device, queue, allocator, [this, texture, swapchain, &i](ID3D12GraphicsCommandList* cmdList) {
                     cmdList->SetName(L"RenderSharedTexture");
                     texture->d3d12WaitForFence(1);
                     texture->d3d12TransitionLayout(cmdList, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-                    m_presentPipeline->BindAttachment(0, texture->d3d12GetTexture());
-                    m_presentPipeline->BindTarget(0, swapchain->GetTexture(), swapchain->GetFormat());
-                    m_presentPipeline->Render(cmdList, swapchain->GetTexture());
+                    m_presentPipelines[i]->BindAttachment(0, texture->d3d12GetTexture());
+                    m_presentPipelines[i]->BindTarget(0, swapchain->GetTexture(), swapchain->GetFormat());
+                    m_presentPipelines[i]->Render(cmdList, swapchain->GetTexture());
                     texture->d3d12TransitionLayout(cmdList, D3D12_RESOURCE_STATE_COPY_DEST);
                     texture->d3d12SignalFence(0);
                 });

@@ -16,7 +16,7 @@ public:
 protected:
     XrSession m_session;
 
-    std::unique_ptr<RND_D3D12::PresentPipeline> m_presentPipeline;
+    std::array<std::unique_ptr<RND_D3D12::PresentPipeline>, 2> m_presentPipelines;
     std::array<std::vector<class SharedTexture*>, 2> m_textures;
     std::vector<XrCompositionLayerBaseHeader*> m_layers;
     std::array<XrCompositionLayerProjectionView, 2> m_frameProjectionViews{};
