@@ -133,5 +133,5 @@ void CemuHooks::hook_UpdateCamera(PPCInterpreter_t* hCPU) {
     swapEndianness(updatedCameraMatrix.rotZ);
     swapEndianness(updatedCameraMatrix.fov);
     swapEndianness(updatedCameraMatrix.aspectRatio);
-    writeMemory(ppc_cameraMatrixOffsetOut, &updatedCameraMatrix);
+    writeMemory(ppc_cameraMatrixOffsetOut, updatedCameraMatrix);
 }
