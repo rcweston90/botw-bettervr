@@ -183,6 +183,7 @@ struct data_VRSettingsIn {
     BEType<int32_t> cameraModeSetting;
     BEType<int32_t> guiFollowSetting;
     BEType<int32_t> alternatingEyeRenderingSetting;
+    BEType<int32_t> cropFlatTo16x9Setting;
 };
 
 struct data_VRCameraIn {

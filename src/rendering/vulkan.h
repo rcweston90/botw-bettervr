@@ -20,8 +20,6 @@ public:
         void Render();
         void DrawOverlayToImage(VkCommandBuffer cb, VkImage destImage);
 
-        bool alreadyStartedFrameOnce = false;
-
     private:
         ImGuiContext* m_context;
         VkDescriptorPool m_descriptorPool;

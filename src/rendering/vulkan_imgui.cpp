@@ -37,7 +37,7 @@ RND_Vulkan::ImGuiOverlay::ImGuiOverlay(VkCommandBuffer cb, uint32_t width, uint3
     VkAttachmentDescription colorAttachment = {
         .format = format,
         .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -160,8 +160,8 @@ RND_Vulkan::ImGuiOverlay::ImGuiOverlay(VkCommandBuffer cb, uint32_t width, uint3
 
     m_cemuRenderWindow = data.hwnd;
 
-    m_mainFramebuffer = std::make_unique<VulkanTexture>(width, height, VK_FORMAT_B10G11R11_UFLOAT_PACK32, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
-    m_hudFramebuffer = std::make_unique<VulkanTexture>(width, height, VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+    m_mainFramebuffer = std::make_unique<VulkanTexture>(width, height, VK_FORMAT_B10G11R11_UFLOAT_PACK32, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
+    m_hudFramebuffer = std::make_unique<VulkanTexture>(width, height, VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 
     // create sampler
     VkSamplerCreateInfo samplerInfo = { VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO };
@@ -204,8 +204,9 @@ RND_Vulkan::ImGuiOverlay::~ImGuiOverlay() {
     ImGui::DestroyContext(m_context);
 }
 
+constexpr ImGuiWindowFlags FULLSCREEN_WINDOW_FLAGS = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus;
+
 void RND_Vulkan::ImGuiOverlay::BeginFrame() {
-    checkAssert(alreadyStartedFrameOnce == false, "BeginFrame called before EndFrame");
     ImGui_ImplVulkan_NewFrame();
     ImGui::NewFrame();
     if (m_mainFramebufferDescriptorSet == VK_NULL_HANDLE) {
@@ -223,6 +224,10 @@ void RND_Vulkan::ImGuiOverlay::BeginFrame() {
     viewportPanelSize.x = viewportPanelSize.x / ImGui::GetIO().DisplayFramebufferScale.x;
     viewportPanelSize.y = viewportPanelSize.y / ImGui::GetIO().DisplayFramebufferScale.y;
 
+    if (VRManager::instance().Hooks->GetSettings().cropFlatTo16x9Setting == 1) {
+
+    }
+
     // center position using aspect ratio
     ImVec2 centerPos = ImVec2((viewportPanelSize.x - viewportPanelSize.y * m_mainFramebufferAspectRatio) / 2, 0);
     ImVec2 centerSize = ImVec2(viewportPanelSize.y * m_mainFramebufferAspectRatio, viewportPanelSize.y);
@@ -230,11 +235,7 @@ void RND_Vulkan::ImGuiOverlay::BeginFrame() {
     {
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(viewport->WorkSize);
-        // ImGui::Begin("HUD Background", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus);
-        ImGui::Begin("HUD Background");
-
-        // m_hudFramebufferDescriptorSet = ImGui_ImplVulkan_AddTexture(m_sampler, m_hudFramebuffer->GetImageView(), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        // m_hudFramebufferDescriptorSet = ImGui_ImplVulkan_AddTexture(m_sampler, m_hudFramebuffer->GetImageView(), VK_IMAGE_LAYOUT_GENERAL);
+        ImGui::Begin("HUD Background", nullptr, FULLSCREEN_WINDOW_FLAGS);
         ImGui::Image((ImTextureID)m_hudFramebufferDescriptorSet, ImVec2(1280, 720));
         ImGui::End();
     }
@@ -242,56 +243,31 @@ void RND_Vulkan::ImGuiOverlay::BeginFrame() {
     {
         ImGui::SetNextWindowPos(centerPos);
         ImGui::SetNextWindowSize(viewport->WorkSize);
-        ImGui::Begin("3D Scene Background");
-        // ImGui::Begin("3D Scene Background", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus);
-
-        // m_mainFramebufferDescriptorSet = ImGui_ImplVulkan_AddTexture(m_sampler, m_mainFramebuffer->GetImageView(), VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-        ImGui::Image((ImTextureID)m_mainFramebufferDescriptorSet, centerSize);
+        ImGui::Begin("3D Background", nullptr, FULLSCREEN_WINDOW_FLAGS);
+        ImGui::Image((ImTextureID)m_mainFramebufferDescriptorSet, centerSize, ImVec2(1, 0), ImVec2(1, 0));
 
         ImGui::End();
     }
 
-    // ImGui::ShowDemoWindow();
-    alreadyStartedFrameOnce = true;
+    ImGui::ShowDemoWindow();
 }
 
 void RND_Vulkan::ImGuiOverlay::Draw3DLayerAsBackground(VkCommandBuffer cb, VkImage srcImage, float aspectRatio) {
-    // copy the images from the 3D layer to the imgui ones so that we can draw them the next frame as a background
     m_mainFramebuffer->vkPipelineBarrier(cb);
-    m_mainFramebuffer->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_GENERAL);
-    m_mainFramebuffer->vkClear(cb, { 1.0f, 0.0f, 0.0f, 1.0f });
-    m_mainFramebuffer->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_GENERAL);
+    m_mainFramebuffer->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    m_mainFramebuffer->vkCopyFromImage(cb, srcImage);
     m_mainFramebuffer->vkPipelineBarrier(cb);
+    m_mainFramebuffer->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 
-    // m_mainFramebuffer->vkPipelineBarrier(cb);
-    // m_mainFramebuffer->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    // m_mainFramebuffer->vkCopyFromImage(cb, srcImage);
-    // m_mainFramebuffer->vkPipelineBarrier(cb);
-    // m_mainFramebuffer->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_GENERAL);
-
-    if (m_mainFramebufferDescriptorSet == VK_NULL_HANDLE) {
-        m_mainFramebufferDescriptorSet = ImGui_ImplVulkan_AddTexture(m_sampler, m_mainFramebuffer->GetImageView(), VK_IMAGE_LAYOUT_GENERAL);
-    }
     m_mainFramebufferAspectRatio = aspectRatio;
 }
 
 void RND_Vulkan::ImGuiOverlay::DrawHUDLayerAsBackground(VkCommandBuffer cb, VkImage srcImage) {
-    // copy the images from the 2D layer to the imgui ones so that we can draw them the next frame as a background
     m_hudFramebuffer->vkPipelineBarrier(cb);
-    m_hudFramebuffer->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_GENERAL);
-    m_hudFramebuffer->vkClear(cb, { 0.0f, 1.0f, 1.0f, 1.0f });
-    m_hudFramebuffer->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_GENERAL);
+    m_hudFramebuffer->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    m_hudFramebuffer->vkCopyFromImage(cb, srcImage);
     m_hudFramebuffer->vkPipelineBarrier(cb);
-
-    // m_hudFramebuffer->vkPipelineBarrier(cb);
-    // m_hudFramebuffer->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    // m_hudFramebuffer->vkCopyFromImage(cb, srcImage);
-    // m_hudFramebuffer->vkPipelineBarrier(cb);
-    // m_hudFramebuffer->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_GENERAL);
-    //
-    // if (m_hudFramebufferDescriptorSet == VK_NULL_HANDLE) {
-    //     m_hudFramebufferDescriptorSet = ImGui_ImplVulkan_AddTexture(m_sampler, m_hudFramebuffer->GetImageView(), VK_IMAGE_LAYOUT_GENERAL);
-    // }
+    m_hudFramebuffer->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 }
 
 void RND_Vulkan::ImGuiOverlay::Render() {
@@ -299,11 +275,6 @@ void RND_Vulkan::ImGuiOverlay::Render() {
 }
 
 void RND_Vulkan::ImGuiOverlay::DrawOverlayToImage(VkCommandBuffer cb, VkImage destImage) {
-    if (!alreadyStartedFrameOnce) {
-        Log::print("DrawOverlayToImage called before BeginFrame");
-        return;
-    }
-
     auto* dispatch = VRManager::instance().VK->GetDeviceDispatch();
 
     // transition framebuffer to color attachment
@@ -343,8 +314,6 @@ void RND_Vulkan::ImGuiOverlay::DrawOverlayToImage(VkCommandBuffer cb, VkImage de
     m_framebufferIdx++;
     if (m_framebufferIdx >= m_framebuffers.size())
         m_framebufferIdx = 0;
-
-    alreadyStartedFrameOnce = false;
 }
 
 

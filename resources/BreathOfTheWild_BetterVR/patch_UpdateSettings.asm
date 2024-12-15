@@ -14,6 +14,9 @@ GUIFollowModeSetting:
 AlternatingEyeRenderingSetting:
 .int $AER
 
+CropFlatTo16_9Setting:
+.int $cropFlatTo16_9
+
 
 vr_updateSettings:
 addi r1, r1, -0x08

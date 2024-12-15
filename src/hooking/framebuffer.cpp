@@ -9,8 +9,6 @@ std::unordered_map<VkImage, std::pair<VkExtent2D, VkFormat>> imageResolutions;
 
 std::vector<std::pair<VkCommandBuffer, SharedTexture*>> s_activeCopyOperations;
 
-uint32_t s_curr3DColorImageWidth = 0;
-uint32_t s_curr3DColorImageHeight = 0;
 VkImage s_curr3DColorImage = VK_NULL_HANDLE;
 VkImage s_curr3DDepthImage = VK_NULL_HANDLE;
 
@@ -56,6 +54,7 @@ void VkDeviceOverrides::CmdClearColorImage(const vkroots::VkDeviceDispatch* pDis
 
         auto& layer3D = VRManager::instance().XR->GetRenderer()->m_layer3D;
         auto& layer2D = VRManager::instance().XR->GetRenderer()->m_layer2D;
+        auto& imguiOverlay = VRManager::instance().VK->m_imguiOverlay;
 
         // initialize the textures of both 2D and 3D layer if either is found since they share the same VkImage and resolution
         if (captureIdx == 0 || captureIdx == 2) {
@@ -64,8 +63,11 @@ void VkDeviceOverrides::CmdClearColorImage(const vkroots::VkDeviceDispatch* pDis
                 if (const auto it = imageResolutions.find(image); it != imageResolutions.end()) {
                     layer3D.InitTextures(it->second.first);
                     layer2D.InitTextures(it->second.first);
-                    s_curr3DColorImageWidth = it->second.first.width;
-                    s_curr3DColorImageHeight = it->second.first.height;
+
+                    imguiOverlay = std::make_unique<RND_Vulkan::ImGuiOverlay>(commandBuffer, it->second.first.width, it->second.first.height, VK_FORMAT_A2B10G10R10_UNORM_PACK32);
+                    VRManager::instance().VK->m_imguiOverlay->BeginFrame();
+                    VRManager::instance().VK->m_imguiOverlay->UpdateControls();
+
                     Log::print("Found rendering resolution {}x{} @ {} using capture #{}", it->second.first.width, it->second.first.height, it->second.second, captureIdx);
                     VRManager::instance().XR->GetRenderer()->StartFrame();
                 }
@@ -85,8 +87,6 @@ void VkDeviceOverrides::CmdClearColorImage(const vkroots::VkDeviceDispatch* pDis
                 if (const auto it = imageResolutions.find(image); it != imageResolutions.end()) {
                     if (it->second.second == VK_FORMAT_B10G11R11_UFLOAT_PACK32) {
                         s_curr3DColorImage = it->first;
-                        s_curr3DColorImageWidth = it->second.first.width;
-                        s_curr3DColorImageHeight = it->second.first.height;
                     }
                 }
                 lockImageResolutions.unlock();
@@ -108,34 +108,25 @@ void VkDeviceOverrides::CmdClearColorImage(const vkroots::VkDeviceDispatch* pDis
                 return;
             }
 
-            VulkanUtils::DebugPipelineBarrier(commandBuffer);
-            VulkanUtils::TransitionLayout(commandBuffer, image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-            const_cast<VkClearColorValue*>(pColor)[0] = { 1.0f, 0.0f, 0.0f, 1.0f };
-            pDispatch->CmdClearColorImage(commandBuffer, image, imageLayout, pColor, rangeCount, pRanges);
-            VulkanUtils::DebugPipelineBarrier(commandBuffer);
-            VulkanUtils::TransitionLayout(commandBuffer, image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-
-
             // note: This uses vkCmdCopyImage to copy the image to an OpenXR-specific texture. s_activeCopyOperations queues a semaphore for the D3D12 side to wait on.
             SharedTexture* texture = layer3D.CopyColorToLayer(commandBuffer, image);
             s_activeCopyOperations.emplace_back(commandBuffer, texture);
             VulkanUtils::DebugPipelineBarrier(commandBuffer);
             VulkanUtils::TransitionLayout(commandBuffer, image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
 
-            if (VRManager::instance().VK->m_imguiOverlay && VRManager::instance().XR->GetRenderer()->m_layer3D.GetStatus() == Status3D::LEFT_BINDING_COLOR) {
-                float aspectRatio = VRManager::instance().XR->GetRenderer()->m_layer3D.GetAspectRatio(OpenXR::EyeSide::RIGHT);
+            if (imguiOverlay && layer3D.GetStatus() == Status3D::RIGHT_BINDING_COLOR) {
+                float aspectRatio = layer3D.GetAspectRatio(OpenXR::EyeSide::RIGHT);
 
                 // note: Uses vkCmdCopyImage to copy the (right-eye-only) image to the imgui overlay's texture
-                VRManager::instance().VK->m_imguiOverlay->Draw3DLayerAsBackground(commandBuffer, image, aspectRatio);
+                imguiOverlay->Draw3DLayerAsBackground(commandBuffer, image, aspectRatio);
 
                 VulkanUtils::DebugPipelineBarrier(commandBuffer);
                 VulkanUtils::TransitionLayout(commandBuffer, image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
             }
 
             // clear the image to be transparent to allow for the HUD to be rendered on top of it which results in a transparent HUD layer
-            // note: This clears the image
-            // const_cast<VkClearColorValue*>(pColor)[0] = { 0.0f, 0.0f, 0.0f, 1.0f };
-            // pDispatch->CmdClearColorImage(commandBuffer, image, imageLayout, pColor, rangeCount, pRanges);
+            const_cast<VkClearColorValue*>(pColor)[0] = { 0.0f, 0.0f, 0.0f, 0.0f };
+            pDispatch->CmdClearColorImage(commandBuffer, image, imageLayout, pColor, rangeCount, pRanges);
 
             VulkanUtils::DebugPipelineBarrier(commandBuffer);
             VulkanUtils::TransitionLayout(commandBuffer, image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
@@ -161,18 +152,15 @@ void VkDeviceOverrides::CmdClearColorImage(const vkroots::VkDeviceDispatch* pDis
             }
 
             // render imgui, and then copy the framebuffer to the 2D layer
-            if (!VRManager::instance().VK->m_imguiOverlay && s_curr3DColorImageWidth != 0) {
-                VRManager::instance().VK->m_imguiOverlay = std::make_unique<RND_Vulkan::ImGuiOverlay>(commandBuffer, s_curr3DColorImageWidth, s_curr3DColorImageHeight, VK_FORMAT_A2B10G10R10_UNORM_PACK32);
-            }
-            else if (VRManager::instance().VK->m_imguiOverlay) {
-                VRManager::instance().VK->m_imguiOverlay->BeginFrame();
-                VRManager::instance().VK->m_imguiOverlay->UpdateControls();
+            if (VRManager::instance().VK->m_imguiOverlay) {
                 VRManager::instance().VK->m_imguiOverlay->Render();
                 VRManager::instance().VK->m_imguiOverlay->DrawOverlayToImage(commandBuffer, image);
                 VulkanUtils::DebugPipelineBarrier(commandBuffer);
                 VulkanUtils::TransitionLayout(commandBuffer, image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL);
-                return;
             }
+
+            // const_cast<VkClearColorValue*>(pColor)[0] = { 1.0f, 0.0f, 0.0f, 0.0f };
+            // pDispatch->CmdClearColorImage(commandBuffer, image, imageLayout, pColor, rangeCount, pRanges);
         }
         return;
     }
@@ -337,6 +325,8 @@ VkResult VkDeviceOverrides::QueuePresentKHR(const vkroots::VkDeviceDispatch* pDi
     }
 
     if (VRManager::instance().VK->m_imguiOverlay) {
+        VRManager::instance().VK->m_imguiOverlay->BeginFrame();
+        VRManager::instance().VK->m_imguiOverlay->UpdateControls();
     }
 
     return pDispatch->QueuePresentKHR(queue, pPresentInfo);

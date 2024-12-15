@@ -163,11 +163,6 @@ VkResult VRLayer::VkInstanceOverrides::CreateDevice(const vkroots::VkInstanceDis
         return result;
     }
 
-    // log all extensions
-    for (const std::string& extension : modifiedExtensions) {
-        Log::print("Enabled extension: {}", extension);
-    }
-
     // Initialize VRManager late if neither vkEnumeratePhysicalDevices and vkGetPhysicalDeviceProperties were called and used to filter the device
     if (!VRManager::instance().VK) {
         Log::print("Wasn't able to filter OpenXR-compatible devices for this instance!");
