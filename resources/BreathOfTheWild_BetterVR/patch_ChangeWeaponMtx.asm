@@ -3,7 +3,6 @@ moduleMatches = 0x6267BFD0
 
 .origin = codecave
 
-; should change the weapon mtx to the hand mtx
 
 changeWeaponMtx:
 lwz r3, 0x58(r1) ; the actor we hackily put on the stack
@@ -53,8 +52,7 @@ addi r1, r1, 0x50
 
 blr
 
-; this forces all weapons to be static
-;0x03125438 = li r5, 3
+; 0x03125438 = li r5, 3 ; this forces all weapons to be static
 
 0x0312587C = bla changeWeaponMtx
 

@@ -21,10 +21,11 @@
 #include <vulkan/vk_layer.h>
 #include <vulkan/vulkan_core.h>
 
+// vkroots vulkan layer framework includes
 #define VKROOTS_NEGOTIATION_INTERFACE VRLayer_NegotiateLoaderLayerInterfaceVersion
-
 #include "vkroots.h"
 
+// D3D12 includes
 #include <d3d12.h>
 #include <D3Dcompiler.h>
 #include <dxgi1_6.h>
@@ -37,13 +38,24 @@
 
 using Microsoft::WRL::ComPtr;
 
+// OpenXR includes
 #define XR_USE_PLATFORM_WIN32
 #define XR_USE_GRAPHICS_API_D3D12
 #include <openxr/openxr.h>
 #include <openxr/openxr_platform.h>
 
+// ImGui includes
 #include <imgui.h>
 #include <imgui_impl_vulkan.h>
+
+// glm includes
+#include <glm/ext/matrix_transform.hpp>
+#include <glm/glm.hpp>
+#include <glm/gtc/constants.hpp>
+#include <glm/gtc/matrix_access.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtx/projection.hpp>
+#include <glm/gtx/quaternion.hpp>
 
 
 inline std::string& toLower(std::string str) {

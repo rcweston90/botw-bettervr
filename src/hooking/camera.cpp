@@ -2,14 +2,6 @@
 #include "instance.h"
 #include "rendering/openxr.h"
 
-#include <glm/ext/matrix_transform.hpp>
-#include <glm/glm.hpp>
-#include <glm/gtc/constants.hpp>
-#include <glm/gtc/matrix_access.hpp>
-#include <glm/gtc/quaternion.hpp>
-#include <glm/gtx/projection.hpp>
-#include <glm/gtx/quaternion.hpp>
-
 
 data_VRProjectionMatrixOut calculateProjectionMatrix(XrFovf viewFOV) {
     float totalHorizontalFov = viewFOV.angleRight - viewFOV.angleLeft;

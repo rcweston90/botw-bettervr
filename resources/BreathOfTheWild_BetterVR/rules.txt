@@ -65,6 +65,12 @@ $AER = 0
 # Third Person - Camera Distance
 
 [Preset]
+name = Zero
+category = Camera Distance
+condition = $cameraMode == 0
+$cameraDistance = 0.0
+
+[Preset]
 name = Low
 category = Camera Distance
 condition = $cameraMode == 0

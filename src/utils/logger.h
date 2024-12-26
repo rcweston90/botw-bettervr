@@ -29,6 +29,24 @@ struct std::formatter<DXGI_FORMAT> : std::formatter<string> {
 };
 
 template <>
+struct std::formatter<glm::fmat3> : std::formatter<string> {
+    auto format(const glm::fmat3 mtx, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "row0: [{}, {}, {}] row1: [{}, {}, {}] row2: [{}, {}, {}]",
+            mtx[0][0], mtx[0][1], mtx[0][2],
+            mtx[1][0], mtx[1][1], mtx[1][2],
+            mtx[2][0], mtx[2][1], mtx[2][2]
+        );
+    }
+};
+
+template <>
+struct std::formatter<glm::fquat> : std::formatter<string> {
+    auto format(const glm::fquat quat, std::format_context& ctx) const {
+        return std::format_to(ctx.out(), "[w={}, x={}, y={}, z={}] (euler: x={}, y={}, z={})", quat.w, quat.x, quat.y, quat.z, glm::degrees(glm::eulerAngles(quat)).x, glm::degrees(glm::eulerAngles(quat)).y, glm::degrees(glm::eulerAngles(quat)).z);
+    }
+};
+
+template <>
 struct std::formatter<BEMatrix34> : std::formatter<string> {
     auto format(const BEMatrix34 mtx, std::format_context& ctx) const {
         return std::format_to(ctx.out(), "[x_x={}, y_x={}, z_x={}, pos_x={}] [x_y={}, x_y={}, z_y={}, pos_y={}] [x_z={}, y_z={}, z_z={}, pos_z={}]",
