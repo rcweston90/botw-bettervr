@@ -1,8 +1,4 @@
-//#include <WinBase.h>
-//#include <consoleapi.h>
-//#include <consoleapi2.h>
-//#include <profileapi.h>
-//#include <processenv.h>
+#include <iostream>
 
 static double timeFrequency;
 static HANDLE consoleHandle;
@@ -20,8 +16,8 @@ Log::Log() {
 }
 
 Log::~Log() {
-#ifdef _DEBUG
     Log::print("Shutting down BetterVR debugging console...");
+#ifdef _DEBUG
     FreeConsole();
 #endif
 }
@@ -33,6 +29,8 @@ void Log::print(const char* message) {
     DWORD charsWritten = 0;
     WriteConsoleA(consoleHandle, messageStr.c_str(), (DWORD)messageStr.size(), &charsWritten, NULL);
     OutputDebugStringA(messageStr.c_str());
+#else
+    std::cout << message << std::endl;
 #endif
 }
 

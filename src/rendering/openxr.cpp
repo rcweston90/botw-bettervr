@@ -31,7 +31,9 @@ OpenXR::OpenXR() {
             timeConvSupported = true;
         }
         else if (strcmp(extensionProperties.extensionName, XR_EXT_DEBUG_UTILS_EXTENSION_NAME) == 0) {
+#if defined(_DEBUG)
             debugUtilsSupported = true;
+#endif
         }
     }
 

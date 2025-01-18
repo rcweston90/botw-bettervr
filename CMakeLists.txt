@@ -1,5 +1,3 @@
-set(VCPKG_TARGET_TRIPLET x64-windows-static-md)
-
 cmake_minimum_required(VERSION 3.7.0)
 project(BetterVR_Layer VERSION 0.1.0 LANGUAGES CXX)
 
@@ -10,6 +8,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Check architecture support
 if (NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
     message(FATAL_ERROR "Only x64 architecture is supported")
+endif ()
+
+# Project Options
+option(ENABLE_DEBUG_INSPECTOR "Enable the entity debug inspector overlay (adds performance overhead due to tracking entities)" $:<CONFIG:Debug>)
+
+if (ENABLE_DEBUG_INSPECTOR)
+    add_compile_definitions(ENABLE_DEBUG_INSPECTOR=1)
 endif ()
 
 # Set global options
@@ -24,8 +29,8 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 add_compile_definitions(NOMINMAX)
 add_compile_options("/await")
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
-set(VCPKG_TARGET_TRIPLET x64-windows-static-md)
-set(VCPKG_HOST_TRIPLET x64-windows-static-md)
+set(VCPKG_TARGET_TRIPLET "x64-windows-static-md$<$<CONFIG:Release>:-rel>")
+set(VCPKG_HOST_TRIPLET "x64-windows-static-md$<$<CONFIG:Release>:-rel>")
 
 # Find vcpkg dependencies
 find_path(VULKAN_HEADERS_INCLUDE_DIRS "vk_video/vulkan_video_codec_h264std.h")

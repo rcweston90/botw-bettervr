@@ -10,7 +10,7 @@ struct MemoryRange {
     std::unique_ptr<MemoryEditor> editor;
 };
 
-using ValueVariant = std::variant<BEType<uint32_t>, BEType<int32_t>, BEType<float>, BEType<uint8_t>, BEVec3, BEMatrix34, MemoryRange, std::string>;
+using ValueVariant = std::variant<BEType<uint32_t>, BEType<int32_t>, BEType<uint16_t>, BEType<uint8_t>, BEType<float>, BEVec3, BEMatrix34, MemoryRange, std::string>;
 
 struct EntityValue {
     std::string value_name;
@@ -44,15 +44,7 @@ public:
         explicit ImGuiOverlay(VkCommandBuffer cb, uint32_t width, uint32_t height, VkFormat format);
         ~ImGuiOverlay();
 
-        std::string m_filter;
-        std::unordered_map<uint32_t, Entity> m_entities;
-        bool m_resetPlot = false;
-        bool m_disablePoints = true;
-        bool m_disableTexts = false;
-        bool m_disableRotations = true;
-        bool m_disableAABBs = false;
-        glm::fvec3 m_playerPos = {};
-
+#ifdef ENABLE_DEBUG_INSPECTOR
         void AddOrUpdateEntity(uint32_t actorId, const std::string& entityName, const std::string& valueName, uint32_t address, ValueVariant&& value, bool isEntity = false);
         void SetPosition(uint32_t actorId, const BEVec3& ws_playerPos, const BEVec3& ws_entityPos);
         void SetRotation(uint32_t actorId, const glm::fquat rotation);
@@ -60,22 +52,31 @@ public:
         void RemoveEntity(uint32_t actorId);
         void RemoveEntityValue(uint32_t actorId, const std::string& valueName);
 
-        bool ShouldBlockGameInput() const { return ImGui::GetIO().WantCaptureKeyboard; }
-
-        void SetInGameFrustum(OpenXR::EyeSide side, glm::fvec3 position, glm::fquat rotation, XrFovf fov);
-        void SetVRFrustum(OpenXR::EyeSide side, glm::fvec3 from, XrPosef pose, XrFovf fov);
-        std::array<std::tuple<glm::fvec3, glm::fquat, XrFovf>, 2> m_inGameFrustums = {};
-        std::array<std::tuple<glm::fvec3, XrPosef, XrFovf>, 2> m_vrFrustums = {};
+        std::unordered_map<uint32_t, Entity> m_entities;
+        glm::fvec3 m_playerPos = {};
+        bool m_resetPlot = false;
+#endif
+        bool ShouldBlockGameInput() { return ImGui::GetIO().WantCaptureKeyboard; }
 
         void BeginFrame();
         void Draw3DLayerAsBackground(VkCommandBuffer cb, VkImage srcImage, float aspectRatio);
         void DrawHUDLayerAsBackground(VkCommandBuffer cb, VkImage srcImage);
-        void UpdateControls();
-
+        void DrawEntityInspector();
+        void Update();
         void Render();
         void DrawOverlayToImage(VkCommandBuffer cb, VkImage destImage);
 
     private:
+#ifdef ENABLE_DEBUG_INSPECTOR
+        void UpdateControls(POINT p);
+
+        std::string m_filter = std::string(256, '\0');
+        bool m_disablePoints = true;
+        bool m_disableTexts = false;
+        bool m_disableRotations = true;
+        bool m_disableAABBs = false;
+#endif
+
         VkDescriptorPool m_descriptorPool;
         VkRenderPass m_renderPass;
 

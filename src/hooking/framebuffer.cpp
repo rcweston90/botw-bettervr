@@ -66,7 +66,7 @@ void VkDeviceOverrides::CmdClearColorImage(const vkroots::VkDeviceDispatch* pDis
 
                     imguiOverlay = std::make_unique<RND_Vulkan::ImGuiOverlay>(commandBuffer, it->second.first.width, it->second.first.height, VK_FORMAT_A2B10G10R10_UNORM_PACK32);
                     VRManager::instance().VK->m_imguiOverlay->BeginFrame();
-                    VRManager::instance().VK->m_imguiOverlay->UpdateControls();
+                    VRManager::instance().VK->m_imguiOverlay->Update();
 
                     Log::print("Found rendering resolution {}x{} @ {} using capture #{}", it->second.first.width, it->second.first.height, it->second.second, captureIdx);
                     VRManager::instance().XR->GetRenderer()->StartFrame();
@@ -326,7 +326,7 @@ VkResult VkDeviceOverrides::QueuePresentKHR(const vkroots::VkDeviceDispatch* pDi
 
     if (VRManager::instance().VK->m_imguiOverlay) {
         VRManager::instance().VK->m_imguiOverlay->BeginFrame();
-        VRManager::instance().VK->m_imguiOverlay->UpdateControls();
+        VRManager::instance().VK->m_imguiOverlay->Update();
     }
 
     return pDispatch->QueuePresentKHR(queue, pPresentInfo);

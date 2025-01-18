@@ -37,7 +37,7 @@ li r3, 0
 bl import.coreinit.hook_CreateNewActor
 cmpwi r3, 1
 bne notSpawnActor
-bl vr_spawnEquipment
+;bl vr_spawnEquipment
 notSpawnActor:
 
 li r4, -1 ; Execute the instruction that got replaced

@@ -117,7 +117,6 @@ const std::vector<std::string> additionalDeviceExtensions = {
     VK_KHR_EXTERNAL_SEMAPHORE_EXTENSION_NAME,
     VK_KHR_EXTERNAL_SEMAPHORE_WIN32_EXTENSION_NAME,
     VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-    // VK_KHR_SURFACE_EXTENSION_NAME,
 };
 
 VkResult VRLayer::VkInstanceOverrides::CreateDevice(const vkroots::VkInstanceDispatch* pDispatch, VkPhysicalDevice gpu, const VkDeviceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDevice* pDevice) {
@@ -167,7 +166,7 @@ VkResult VRLayer::VkInstanceOverrides::CreateDevice(const vkroots::VkInstanceDis
     if (!VRManager::instance().VK) {
         Log::print("Wasn't able to filter OpenXR-compatible devices for this instance!");
         Log::print("You might encounter an error if you've selected a GPU that's not connected to the VR headset in Cemu's settings!");
-        Log::print("This issue appears due to OBS's Vulkan layer being installed which skips some calls used to hide GPUs that aren't compatible with OpenXR.");
+        Log::print("This issue appears due to OBS's Vulkan layer being installed which skips some calls used to hide GPUs that aren't compatible with your VR headset.");
     }
 
     return result;
@@ -178,7 +177,6 @@ void VRLayer::VkDeviceOverrides::DestroyDevice(const vkroots::VkDeviceDispatch* 
 }
 
 VKROOTS_DEFINE_LAYER_INTERFACES(VRLayer::VkInstanceOverrides, VRLayer::VkPhysicalDeviceOverrides, VRLayer::VkDeviceOverrides);
-
 
 // todo: These methods aren't required since we already use the negotiatelayerinterface function, thus can be removed for simplicity
 VK_LAYER_EXPORT PFN_vkVoidFunction VKAPI_CALL VRLayer_GetInstanceProcAddr(VkInstance instance, const char* pName) {

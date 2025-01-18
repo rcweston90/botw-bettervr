@@ -6,6 +6,7 @@
   <component name="CMakeWorkspace" PROJECT_DIR="$PROJECT_DIR$" />
   <component name="CidrRootsConfiguration">
     <sourceRoots>
+      <file path="$PROJECT_DIR$/dependencies" />
       <file path="$PROJECT_DIR$/include" />
       <file path="$PROJECT_DIR$/resources" />
       <file path="$PROJECT_DIR$/src" />
@@ -14,7 +15,6 @@
       <file path="$PROJECT_DIR$/Cemu" />
       <file path="$PROJECT_DIR$/MetaXRSimulator" />
       <file path="$PROJECT_DIR$/ReverseEngineering" />
-      <file path="$PROJECT_DIR$/dependencies" />
       <file path="$PROJECT_DIR$/out" />
     </excludeRoots>
   </component>

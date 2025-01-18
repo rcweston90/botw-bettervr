@@ -88,12 +88,15 @@ RND_Vulkan::ImGuiOverlay::ImGuiOverlay(VkCommandBuffer cb, uint32_t width, uint3
         PFN_vkVoidFunction addr = VRManager::instance().VK->GetDeviceDispatch()->GetDeviceProcAddr(device, funcName);
 
         if (addr == nullptr) {
-            // Log::print("Failed to load function {}", funcName);
             addr = VRManager::instance().VK->GetInstanceDispatch()->GetInstanceProcAddr(VRManager::instance().VK->GetInstance(), funcName);
+#ifdef _DEBUG
             Log::print("Loaded function {} at {} using instance", funcName, (void*)addr);
+#endif
         }
         else {
+#ifdef _DEBUG
             Log::print("Loaded function {} at {}", funcName, (void*)addr);
+#endif
         }
 
         return addr;
@@ -123,9 +126,8 @@ RND_Vulkan::ImGuiOverlay::ImGuiOverlay(VkCommandBuffer cb, uint32_t width, uint3
         framebuffer = std::make_unique<VulkanFramebuffer>(width, height, format, m_renderPass);
     }
 
-    Log::print("Initializing fonts for ImGui...");
+    Log::print("Initializing font textures for ImGui...");
     ImGui_ImplVulkan_CreateFontsTexture(cb);
-    Log::print("Fonts initialized for ImGui");
 
     // find HWND that starts with Cemu in its title
     struct EnumWindowsData {
@@ -183,8 +185,6 @@ RND_Vulkan::ImGuiOverlay::ImGuiOverlay(VkCommandBuffer cb, uint32_t width, uint3
     samplerInfo.minLod = -1000.0f;
     samplerInfo.maxLod = 1000.0f;
     checkVkResult(VRManager::instance().VK->GetDeviceDispatch()->CreateSampler(VRManager::instance().VK->GetDevice(), &samplerInfo, nullptr, &m_sampler), "Failed to create sampler for ImGui");
-
-    m_filter.resize(256);
 }
 
 RND_Vulkan::ImGuiOverlay::~ImGuiOverlay() {
@@ -210,89 +210,6 @@ RND_Vulkan::ImGuiOverlay::~ImGuiOverlay() {
 }
 
 constexpr ImGuiWindowFlags FULLSCREEN_WINDOW_FLAGS = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoBringToFrontOnFocus;
-
-constexpr float nearZ = 0.1f;
-constexpr float farZ = 1000.0f;
-void DrawFrustumInPlot(glm::vec3& position, glm::fquat& rotation, XrFovf& fov, ImU32 color) {
-    float tanLeft = tanf(fov.angleLeft);
-    float tanRight = tanf(fov.angleRight);
-    float tanUp = tanf(fov.angleUp);
-    float tanDown = tanf(fov.angleDown);
-
-    float nearXLeft = tanLeft * nearZ;
-    float nearXRight = tanRight * nearZ;
-    float nearYUp = tanUp * nearZ;
-    float nearYDown = tanDown * nearZ;
-
-    float farXLeft = tanLeft * farZ;
-    float farXRight = tanRight * farZ;
-    float farYUp = tanUp * farZ;
-    float farYDown = tanDown * farZ;
-
-    glm::vec3 frustumCorners[8] = {
-        {nearXLeft,  nearYUp,    -nearZ}, // near top-left
-        {nearXRight, nearYUp,    -nearZ}, // near top-right
-        {nearXRight, nearYDown,  -nearZ}, // near bottom-right
-        {nearXLeft,  nearYDown,  -nearZ}, // near bottom-left
-        {farXLeft,   farYUp,     -farZ},  // far top-left
-        {farXRight,  farYUp,     -farZ},  // far top-right
-        {farXRight,  farYDown,   -farZ},  // far bottom-right
-        {farXLeft,   farYDown,   -farZ}   // far bottom-left
-    };
-
-    glm::mat4 transform = glm::translate(glm::mat4(1.0f), position) * glm::mat4_cast(rotation);
-
-    ImPlot3DPoint frustumPoints[8];
-    for (int i = 0; i < 8; ++i) {
-        glm::vec4 worldPos = transform * glm::vec4(frustumCorners[i], 1.0f);
-        frustumPoints[i] = ImPlot3DPoint(worldPos.x, worldPos.y, worldPos.z);
-    }
-
-    int edges[12][2] = {
-        {0, 1}, {1, 2}, {2, 3}, {3, 0}, // near plane
-        {4, 5}, {5, 6}, {6, 7}, {7, 4}, // far plane
-        {0, 4}, {1, 5}, {2, 6}, {3, 7}  // connecting edges
-    };
-
-    for (const auto& edge : edges) {
-        ImVec2 p0 = ImPlot3D::PlotToPixels(frustumPoints[edge[0]]);
-        ImVec2 p1 = ImPlot3D::PlotToPixels(frustumPoints[edge[1]]);
-        ImPlot3D::GetPlotDrawList()->AddLine(p0, p1, color);
-    }
-}
-
-void DrawAABBInPlot(glm::fvec3 pos, glm::fvec3& min, glm::fvec3& max, glm::fquat& rotation) {
-    glm::fvec3 corners[8] = {
-        {min.x, min.y, min.z},
-        {max.x, min.y, min.z},
-        {max.x, max.y, min.z},
-        {min.x, max.y, min.z},
-        {min.x, min.y, max.z},
-        {max.x, min.y, max.z},
-        {max.x, max.y, max.z},
-        {min.x, max.y, max.z}
-    };
-
-    glm::mat4 transform = glm::translate(glm::mat4(1.0f), pos) * glm::mat4_cast(rotation);
-
-    ImPlot3DPoint aabbPoints[8];
-    for (int i = 0; i < 8; ++i) {
-        glm::vec4 worldPos = transform * glm::vec4(corners[i], 1.0f);
-        aabbPoints[i] = ImPlot3DPoint(worldPos.x, worldPos.z, worldPos.y);
-    }
-
-    int edges[12][2] = {
-        {0, 1}, {1, 2}, {2, 3}, {3, 0}, // near plane
-        {4, 5}, {5, 6}, {6, 7}, {7, 4}, // far plane
-        {0, 4}, {1, 5}, {2, 6}, {3, 7}  // connecting edges
-    };
-
-    for (const auto& edge : edges) {
-        ImVec2 p0 = ImPlot3D::PlotToPixels(aabbPoints[edge[0]]);
-        ImVec2 p1 = ImPlot3D::PlotToPixels(aabbPoints[edge[1]]);
-        ImPlot3D::GetPlotDrawList()->AddLine(p0, p1, IM_COL32(255, 0, 0, 255));
-    }
-}
 
 void RND_Vulkan::ImGuiOverlay::BeginFrame() {
     ImGui_ImplVulkan_NewFrame();
@@ -350,192 +267,6 @@ void RND_Vulkan::ImGuiOverlay::BeginFrame() {
         ImGui::PopStyleVar();
         ImGui::PopStyleVar();
     }
-
-    // ImGui::ShowDemoWindow();
-    // ImPlot3D::ShowDemoWindow();
-
-    ImGui::Begin("BetterVR Debugger");
-
-    static char buf[256];
-    ImGui::InputText("Entity Filter", buf, std::size(buf));
-    m_filter = buf;
-
-    ImGui::BeginChild("ScrollArea", ImVec2(0, 0));
-
-    if (ImGui::CollapsingHeader("World Space Inspector")) {
-        ImGui::Checkbox("Disable Points For Entities", &m_disablePoints);
-        ImGui::Checkbox("Disable Text For Entities", &m_disableTexts);
-        ImGui::Checkbox("Disable Rotations For Entities", &m_disableRotations);
-        ImGui::Checkbox("Disable AABBs For Entities", &m_disableAABBs);
-
-        if (ImPlot3D::BeginPlot("##plot", ImVec2(-1, 0), ImPlot3DFlags_NoLegend | ImPlot3DFlags_NoTitle)) {
-            // add -50 and 50 to playerPos to make the plot centered around the player
-            constexpr float zoomOutAxis = 30.0f;
-            ImPlot3D::SetupAxesLimits(
-                -zoomOutAxis, +zoomOutAxis,
-                -zoomOutAxis, +zoomOutAxis,
-                -zoomOutAxis, +zoomOutAxis,
-                ImPlot3DCond_Once
-            );
-            ImPlot3D::SetupAxes("X", "Z", "Y");
-
-            if (m_resetPlot) {
-                ImPlot3D::GetCurrentPlot()->Axes[ImAxis3D_X].SetRange(m_playerPos.x-zoomOutAxis, m_playerPos.x+zoomOutAxis);
-                ImPlot3D::GetCurrentPlot()->Axes[ImAxis3D_Y].SetRange(m_playerPos.z-zoomOutAxis, m_playerPos.z+zoomOutAxis);
-                ImPlot3D::GetCurrentPlot()->Axes[ImAxis3D_Z].SetRange(m_playerPos.y-zoomOutAxis, m_playerPos.y+zoomOutAxis);
-                m_resetPlot = false;
-            }
-
-            // plot entities in 3D space
-            for (auto& entity : m_entities | std::views::values) {
-                if (!m_disableTexts) {
-                    ImPlot3D::PlotText(entity.name.c_str(), entity.position.x.getLE(), entity.position.z.getLE(), entity.position.y.getLE(), 0, ImVec2(0, 5));
-                }
-                if (!m_disablePoints) {
-                    ImVec2 cntr = ImPlot3D::PlotToPixels(ImPlot3DPoint(entity.position.x.getLE(), entity.position.z.getLE(), entity.position.y.getLE()));
-                    ImPlot3D::GetPlotDrawList()->AddCircleFilled(cntr, 2, IM_COL32(255, 255, 0, 255), 8);
-                }
-                if (!m_disableRotations) {
-                    glm::fvec3 start = entity.position.getLE();
-                    glm::fvec3 end = entity.rotation * entity.position.getLE() * 0.05f;
-                    float xList[] = { start.x, end.x };
-                    float yList[] = { start.z, end.z };
-                    float zList[] = { start.y, end.y };
-                    ImPlot3D::PlotLine(entity.name.c_str(), xList, yList, zList, 2);
-                }
-                if (!m_disableAABBs) {
-                    DrawAABBInPlot(entity.position.getLE(), entity.aabbMin, entity.aabbMax, entity.rotation);
-                }
-            }
-
-            // draw VR frustums
-            // for (int i = 0; i < 2; ++i) {
-            //     XrPosef pose = std::get<1>(m_vrFrustums[i]);
-            //     glm::fquat rotation = glm::fquat(pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z);
-            //     DrawFrustumInPlot(std::get<0>(m_vrFrustums[i]), rotation, std::get<2>(m_vrFrustums[i]), IM_COL32(255, 0, 0, 255));
-            // }
-
-            ImPlot3D::EndPlot();
-        }
-    }
-
-    // display entities
-    if (ImGui::CollapsingHeader("Entity List")) {
-        // sort m_entities by priority
-        std::multimap<float, std::reference_wrapper<Entity>> sortedEntities;
-        for (auto& entity : m_entities | std::views::values) {
-            if (m_filter.empty() || entity.name.find(m_filter) != std::string::npos) {
-                bool isAnyValueFrozen = std::ranges::any_of(entity.values, [](auto& value) { return value.frozen; });
-                // give priority to frozen entities
-                sortedEntities.emplace(isAnyValueFrozen ? 0.0f - entity.priority : entity.priority, entity);
-            }
-        }
-
-        for (auto& [_, entity] : sortedEntities) {
-            std::string id = entity.get().name + "##" + std::to_string(entity.get().values[0].value_address);
-            ImGui::Text(std::format("{}: dist={}", entity.get().name, std::abs(entity.get().priority)).c_str());
-            ImGui::PushID(id.c_str());
-
-            for (auto& value : entity.get().values) {
-                ImGui::PushID(value.value_name.c_str());
-
-                ImGui::Checkbox("##Frozen", &value.frozen);
-                ImGui::SameLine();
-                if (ImGui::Button("Copy")) {
-                    ImGui::SetClipboardText(std::format("0x{:08x}", value.value_address).c_str());
-                }
-                ImGui::SameLine();
-
-                ImGui::BeginDisabled(!value.frozen && false);
-
-                std::visit([&]<typename T0>(T0&& arg) {
-                    using T = std::decay_t<T0>;
-
-                    if constexpr (std::is_same_v<T, BEType<uint32_t>>) {
-                        uint32_t val = std::get<BEType<uint32_t>>(value.value).getLE();
-                        if (ImGui::DragScalar(value.value_name.c_str(), ImGuiDataType_U32, &val)) {
-                            std::get<BEType<uint32_t>>(value.value) = val;
-                        }
-                    }
-                    else if constexpr (std::is_same_v<T, BEType<int32_t>>) {
-                        int32_t val = std::get<BEType<int32_t>>(value.value).getLE();
-                        if (ImGui::DragScalar(value.value_name.c_str(), ImGuiDataType_S32, &val)) {
-                            std::get<BEType<int32_t>>(value.value) = val;
-                        }
-                    }
-                    else if constexpr (std::is_same_v<T, BEType<float>>) {
-                        float val = std::get<BEType<float>>(value.value).getLE();
-                        if (ImGui::DragScalar(value.value_name.c_str(), ImGuiDataType_Float, &val)) {
-                            std::get<BEType<float>>(value.value) = val;
-                        }
-                    }
-                    else if constexpr (std::is_same_v<T, BEType<uint8_t>>) {
-                        uint8_t val = std::get<BEType<uint8_t>>(value.value).getLE();
-                        if (ImGui::DragScalar(value.value_name.c_str(), ImGuiDataType_U8, &val)) {
-                            std::get<BEType<uint8_t>>(value.value) = val;
-                        }
-                    }
-                    else if constexpr (std::is_same_v<T, BEVec3>) {
-                        float xyz[3] = { std::get<BEVec3>(value.value).x.getLE(), std::get<BEVec3>(value.value).y.getLE(), std::get<BEVec3>(value.value).z.getLE() };
-                        if (ImGui::DragFloat3(value.value_name.c_str(), xyz)) {
-                            std::get<BEVec3>(value.value).x = xyz[0];
-                            std::get<BEVec3>(value.value).y = xyz[1];
-                            std::get<BEVec3>(value.value).z = xyz[2];
-                        }
-                    }
-                    else if constexpr (std::is_same_v<T, BEMatrix34>) {
-                        if (value.expanded) {
-                            auto mtx = std::get<BEMatrix34>(value.value).getLE();
-                            ImGui::Indent(); bool row0Changed = ImGui::DragFloat4("Row 0", mtx[0].data(), 10.0f, 0, 0, nullptr, ImGuiSliderFlags_NoRoundToFormat); ImGui::Unindent();
-                            ImGui::Indent(); bool row1Changed = ImGui::DragFloat4("Row 1", mtx[1].data(), 10.0f, 0, 0, nullptr, ImGuiSliderFlags_NoRoundToFormat); ImGui::Unindent();
-                            ImGui::Indent(); bool row2Changed = ImGui::DragFloat4("Row 2", mtx[2].data(), 10.0f, 0, 0, nullptr, ImGuiSliderFlags_NoRoundToFormat); ImGui::Unindent();
-                            if (row0Changed || row1Changed || row2Changed) {
-                                std::get<BEMatrix34>(value.value).setLE(mtx);
-                            }
-                        }
-                        else {
-                            float xyz[3] = { std::get<BEMatrix34>(value.value).pos_x.getLE(), std::get<BEMatrix34>(value.value).pos_y.getLE(), std::get<BEMatrix34>(value.value).pos_z.getLE() };
-                            if (ImGui::DragFloat3(value.value_name.c_str(), xyz)) {
-                                std::get<BEMatrix34>(value.value).pos_x = xyz[0];
-                                std::get<BEMatrix34>(value.value).pos_y = xyz[1];
-                                std::get<BEMatrix34>(value.value).pos_z = xyz[2];
-                            }
-                        }
-
-                        // allow matrix to be expandable to show more
-                        ImGui::SameLine();
-                        if (ImGui::Button("...")) {
-                            value.expanded = !value.expanded;
-                        }
-                    }
-                    else if constexpr (std::is_same_v<T, MemoryRange>) {
-                        if (ImGui::Button(std::format("{} '{}' memory at {:08X}", value.expanded ? "Close" : "Open", value.value_name, value.value_address).c_str())) {
-                            value.expanded = !value.expanded;
-                        }
-                        if (value.expanded) {
-                            auto& mem_edit = std::get<MemoryRange>(value.value).editor;
-                            ImU8* data = (ImU8*)std::get<MemoryRange>(value.value).start;
-                            size_t size = std::get<MemoryRange>(value.value).end - std::get<MemoryRange>(value.value).start;
-                            std::string windowName = std::format("{} at {:08X} with size of {:08X}", value.value_name, value.value_address, size);
-                            mem_edit->DrawWindow(windowName.c_str(), (ImU8*)CemuHooks::GetMemoryBaseAddress()+(size_t)data, size, (size_t)data);
-                        }
-                    }
-                    else if constexpr (std::is_same_v<T, std::string>) {
-                        std::string val = std::get<std::string>(value.value);
-                        ImGui::Text( val.c_str());
-                    }
-                }, value.value);
-
-                ImGui::EndDisabled();
-
-                ImGui::PopID();
-            }
-
-            ImGui::PopID();
-        }
-    }
-    ImGui::EndChild();
-    ImGui::End();
 }
 
 void RND_Vulkan::ImGuiOverlay::Draw3DLayerAsBackground(VkCommandBuffer cb, VkImage srcImage, float aspectRatio) {
@@ -566,73 +297,7 @@ void RND_Vulkan::ImGuiOverlay::Render() {
     ImGui::Render();
 }
 
-void RND_Vulkan::ImGuiOverlay::DrawOverlayToImage(VkCommandBuffer cb, VkImage destImage) {
-    auto* dispatch = VRManager::instance().VK->GetDeviceDispatch();
-
-    // transition framebuffer to color attachment
-    m_framebuffers[m_framebufferIdx]->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-    m_framebuffers[m_framebufferIdx]->vkPipelineBarrier(cb);
-
-    // start render pass
-    VkClearValue clearValue = { .color = { 0.0f, 0.0f, 0.0f, 1.0f } };
-    VkRenderPassBeginInfo renderPassInfo = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .renderPass = m_renderPass,
-        .framebuffer = m_framebuffers[m_framebufferIdx]->GetFramebuffer(),
-        .renderArea = {
-            .offset = { 0, 0 },
-            .extent = { (uint32_t)ImGui::GetIO().DisplaySize.x, (uint32_t)ImGui::GetIO().DisplaySize.y }
-        },
-        .clearValueCount = 1,
-        .pClearValues = &clearValue
-    };
-    dispatch->CmdBeginRenderPass(cb, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-    // render imgui
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cb);
-
-    // end render pass
-    dispatch->CmdEndRenderPass(cb);
-
-    // transition framebuffer to now be a transfer source
-    m_framebuffers[m_framebufferIdx]->vkPipelineBarrier(cb);
-    m_framebuffers[m_framebufferIdx]->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-    m_framebuffers[m_framebufferIdx]->vkCopyToImage(cb, destImage);
-    m_framebuffers[m_framebufferIdx]->vkPipelineBarrier(cb);
-
-    m_framebufferIdx++;
-    if (m_framebufferIdx >= m_framebuffers.size())
-        m_framebufferIdx = 0;
-}
-
-bool s_isLeftMouseButtonPressed = false;
-bool s_isRightMouseButtonPressed = false;
-bool s_isMiddleMouseButtonPressed = false;
-std::array<bool, 256> s_pressedKeyState = {};
-std::array<bool, ImGuiKey_NamedKey_COUNT> s_pressedNamedKeyState = {};
-
-#define IS_ALPHANUMERIC_KEY_DOWN_AND_WASNT_PREVIOUSLY_DOWN(key, isShiftPressed) { \
-    bool isKeyDown = GetAsyncKeyState(key) & 0x8000; \
-    bool wasKeyDown = s_pressedKeyState[key]; \
-    s_pressedKeyState[key] = isKeyDown; \
-    if (isKeyDown && !wasKeyDown) { \
-        ImGui::GetIO().AddInputCharacter(isShiftPressed ? key : tolower(key)); \
-    } \
-}
-
-#define IS_KEY_DOWN_AND_WASNT_PREVIOUSLY_DOWN(key, imGuiKey) { \
-    bool wasKeyDown = s_pressedNamedKeyState[imGuiKey - ImGuiKey_NamedKey_BEGIN]; \
-    bool isKeyDown = GetAsyncKeyState(key) & 0x8000; \
-    s_pressedNamedKeyState[imGuiKey - ImGuiKey_NamedKey_BEGIN] = isKeyDown; \
-    if (isKeyDown && !wasKeyDown) { \
-        ImGui::GetIO().AddKeyEvent(imGuiKey, true); \
-    } \
-    else if (!isKeyDown && wasKeyDown) { \
-        ImGui::GetIO().AddKeyEvent(imGuiKey, false); \
-    } \
-}
-
-void RND_Vulkan::ImGuiOverlay::UpdateControls() {
+void RND_Vulkan::ImGuiOverlay::Update() {
     POINT p;
     GetCursorPos(&p);
 
@@ -668,6 +333,76 @@ void RND_Vulkan::ImGuiOverlay::UpdateControls() {
 
     ImGui::GetIO().DisplayFramebufferScale = ImVec2((float)framebufferWidth / (float)windowWidth, (float)framebufferHeight / (float)windowHeight);
 
+#ifdef ENABLE_DEBUG_INSPECTOR
+    // update mouse controls and keyboard input
+    UpdateControls(p);
+#endif
+}
+
+void RND_Vulkan::ImGuiOverlay::DrawOverlayToImage(VkCommandBuffer cb, VkImage destImage) {
+    auto* dispatch = VRManager::instance().VK->GetDeviceDispatch();
+
+    // transition framebuffer to color attachment
+    m_framebuffers[m_framebufferIdx]->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    m_framebuffers[m_framebufferIdx]->vkPipelineBarrier(cb);
+
+    // start render pass
+    VkClearValue clearValue = { .color = { 0.0f, 0.0f, 0.0f, 1.0f } };
+    VkRenderPassBeginInfo renderPassInfo = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .renderPass = m_renderPass,
+        .framebuffer = m_framebuffers[m_framebufferIdx]->GetFramebuffer(),
+        .renderArea = {
+            .offset = { 0, 0 },
+            .extent = { (uint32_t)ImGui::GetIO().DisplaySize.x, (uint32_t)ImGui::GetIO().DisplaySize.y } },
+        .clearValueCount = 1,
+        .pClearValues = &clearValue
+    };
+    dispatch->CmdBeginRenderPass(cb, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    // render imgui
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cb);
+
+    // end render pass
+    dispatch->CmdEndRenderPass(cb);
+
+    // transition framebuffer to now be a transfer source
+    m_framebuffers[m_framebufferIdx]->vkPipelineBarrier(cb);
+    m_framebuffers[m_framebufferIdx]->vkTransitionLayout(cb, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+    m_framebuffers[m_framebufferIdx]->vkCopyToImage(cb, destImage);
+    m_framebuffers[m_framebufferIdx]->vkPipelineBarrier(cb);
+
+    m_framebufferIdx++;
+    if (m_framebufferIdx >= m_framebuffers.size())
+        m_framebufferIdx = 0;
+}
+
+#ifdef ENABLE_DEBUG_INSPECTOR
+std::array<bool, 256> s_pressedKeyState = {};
+std::array<bool, ImGuiKey_NamedKey_COUNT> s_pressedNamedKeyState = {};
+
+#define IS_ALPHANUMERIC_KEY_DOWN_AND_WASNT_PREVIOUSLY_DOWN(key, isShiftPressed) { \
+    bool isKeyDown = GetAsyncKeyState(key) & 0x8000; \
+    bool wasKeyDown = s_pressedKeyState[key]; \
+    s_pressedKeyState[key] = isKeyDown; \
+    if (isKeyDown && !wasKeyDown) { \
+        ImGui::GetIO().AddInputCharacter(isShiftPressed ? key : tolower(key)); \
+    } \
+}
+
+#define IS_KEY_DOWN_AND_WASNT_PREVIOUSLY_DOWN(key, imGuiKey) { \
+    bool wasKeyDown = s_pressedNamedKeyState[imGuiKey - ImGuiKey_NamedKey_BEGIN]; \
+    bool isKeyDown = GetAsyncKeyState(key) & 0x8000; \
+    s_pressedNamedKeyState[imGuiKey - ImGuiKey_NamedKey_BEGIN] = isKeyDown; \
+    if (isKeyDown && !wasKeyDown) { \
+        ImGui::GetIO().AddKeyEvent(imGuiKey, true); \
+    } \
+    else if (!isKeyDown && wasKeyDown) { \
+        ImGui::GetIO().AddKeyEvent(imGuiKey, false); \
+    } \
+}
+
+void RND_Vulkan::ImGuiOverlay::UpdateControls(POINT p) {
     // update mouse state depending on if the window is focused
     if (GetForegroundWindow() != m_cemuTopWindow) {
         ImGui::GetIO().ClearInputMouse();
@@ -678,7 +413,7 @@ void RND_Vulkan::ImGuiOverlay::UpdateControls() {
         ImGui::GetIO().AddMouseButtonEvent(0, GetAsyncKeyState(VK_LBUTTON) & 0x8000);
         ImGui::GetIO().AddMouseButtonEvent(1, GetAsyncKeyState(VK_RBUTTON) & 0x8000);
         ImGui::GetIO().AddMouseButtonEvent(2, GetAsyncKeyState(VK_MBUTTON) & 0x8000);
-        ImGui::GetIO().AddMousePosEvent(p.x, p.y);
+        ImGui::GetIO().AddMousePosEvent((float)p.x, (float)p.y);
 
         // capture keyboard input
         ImGui::GetIO().KeyAlt = GetAsyncKeyState(VK_MENU) & 0x8000;
@@ -747,7 +482,222 @@ void RND_Vulkan::ImGuiOverlay::UpdateControls() {
     }
 }
 
-// Memory Viewer/Editor
+void DrawAABBInPlot(glm::fvec3 pos, glm::fvec3& min, glm::fvec3& max, glm::fquat& rotation) {
+    glm::fvec3 corners[8] = {
+        {min.x, min.y, min.z},
+        {max.x, min.y, min.z},
+        {max.x, max.y, min.z},
+        {min.x, max.y, min.z},
+        {min.x, min.y, max.z},
+        {max.x, min.y, max.z},
+        {max.x, max.y, max.z},
+        {min.x, max.y, max.z}
+    };
+
+    glm::mat4 transform = glm::translate(glm::mat4(1.0f), pos) * glm::mat4_cast(rotation);
+
+    ImPlot3DPoint aabbPoints[8];
+    for (int i = 0; i < 8; ++i) {
+        glm::vec4 worldPos = transform * glm::vec4(corners[i], 1.0f);
+        aabbPoints[i] = ImPlot3DPoint(worldPos.x, worldPos.z, worldPos.y);
+    }
+
+    int edges[12][2] = {
+        {0, 1}, {1, 2}, {2, 3}, {3, 0}, // near plane
+        {4, 5}, {5, 6}, {6, 7}, {7, 4}, // far plane
+        {0, 4}, {1, 5}, {2, 6}, {3, 7}  // connecting edges
+    };
+
+    for (const auto& edge : edges) {
+        ImVec2 p0 = ImPlot3D::PlotToPixels(aabbPoints[edge[0]]);
+        ImVec2 p1 = ImPlot3D::PlotToPixels(aabbPoints[edge[1]]);
+        ImPlot3D::GetPlotDrawList()->AddLine(p0, p1, IM_COL32(255, 0, 0, 255));
+    }
+}
+
+void RND_Vulkan::ImGuiOverlay::DrawEntityInspector() {
+    ImGui::Begin("BetterVR Debugger");
+
+    static char buf[256];
+    ImGui::InputText("Entity Filter", buf, std::size(buf));
+    m_filter = buf;
+
+    ImGui::BeginChild("ScrollArea", ImVec2(0, 0));
+
+    if (ImGui::CollapsingHeader("World Space Inspector")) {
+        ImGui::Checkbox("Disable Points For Entities", &m_disablePoints);
+        ImGui::Checkbox("Disable Text For Entities", &m_disableTexts);
+        ImGui::Checkbox("Disable Rotations For Entities", &m_disableRotations);
+        ImGui::Checkbox("Disable AABBs For Entities", &m_disableAABBs);
+
+        if (ImPlot3D::BeginPlot("##plot", ImVec2(-1, 0), ImPlot3DFlags_NoLegend | ImPlot3DFlags_NoTitle)) {
+            // add -50 and 50 to playerPos to make the plot centered around the player
+            constexpr float zoomOutAxis = 30.0f;
+            ImPlot3D::SetupAxesLimits(
+                -zoomOutAxis, +zoomOutAxis,
+                -zoomOutAxis, +zoomOutAxis,
+                -zoomOutAxis, +zoomOutAxis,
+                ImPlot3DCond_Once
+            );
+            ImPlot3D::SetupAxes("X", "Z", "Y");
+
+            if (m_resetPlot) {
+                ImPlot3D::GetCurrentPlot()->Axes[ImAxis3D_X].SetRange(m_playerPos.x-zoomOutAxis, m_playerPos.x+zoomOutAxis);
+                ImPlot3D::GetCurrentPlot()->Axes[ImAxis3D_Y].SetRange(m_playerPos.z-zoomOutAxis, m_playerPos.z+zoomOutAxis);
+                ImPlot3D::GetCurrentPlot()->Axes[ImAxis3D_Z].SetRange(m_playerPos.y-zoomOutAxis, m_playerPos.y+zoomOutAxis);
+                m_resetPlot = false;
+            }
+
+            // plot entities in 3D space
+            for (auto& entity : m_entities | std::views::values) {
+                if (!m_disableTexts) {
+                    ImPlot3D::PlotText(entity.name.c_str(), entity.position.x.getLE(), entity.position.z.getLE(), entity.position.y.getLE(), 0, ImVec2(0, 5));
+                }
+                if (!m_disablePoints) {
+                    ImVec2 cntr = ImPlot3D::PlotToPixels(ImPlot3DPoint(entity.position.x.getLE(), entity.position.z.getLE(), entity.position.y.getLE()));
+                    ImPlot3D::GetPlotDrawList()->AddCircleFilled(cntr, 2, IM_COL32(255, 255, 0, 255), 8);
+                }
+                if (!m_disableRotations) {
+                    glm::fvec3 start = entity.position.getLE();
+                    glm::fvec3 end = entity.rotation * entity.position.getLE() * 0.05f;
+                    float xList[] = { start.x, end.x };
+                    float yList[] = { start.z, end.z };
+                    float zList[] = { start.y, end.y };
+                    ImPlot3D::PlotLine(entity.name.c_str(), xList, yList, zList, 2);
+                }
+                if (!m_disableAABBs) {
+                    DrawAABBInPlot(entity.position.getLE(), entity.aabbMin, entity.aabbMax, entity.rotation);
+                }
+            }
+
+            ImPlot3D::EndPlot();
+        }
+    }
+
+    // display entities
+    if (ImGui::CollapsingHeader("Entity List")) {
+        // sort m_entities by priority
+        std::multimap<float, std::reference_wrapper<Entity>> sortedEntities;
+        for (auto& entity : m_entities | std::views::values) {
+            if (m_filter.empty() || entity.name.find(m_filter) != std::string::npos) {
+                bool isAnyValueFrozen = std::ranges::any_of(entity.values, [](auto& value) { return value.frozen; });
+                // give priority to frozen entities
+                sortedEntities.emplace(isAnyValueFrozen ? 0.0f - entity.priority : entity.priority, entity);
+            }
+        }
+
+        for (auto& entity : sortedEntities | std::views::values) {
+            std::string id = entity.get().name + "##" + std::to_string(entity.get().values[0].value_address);
+            ImGui::Text(std::format("{}: dist={}", entity.get().name, std::abs(entity.get().priority)).c_str());
+            ImGui::PushID(id.c_str());
+
+            for (auto& value : entity.get().values) {
+                ImGui::PushID(value.value_name.c_str());
+
+                ImGui::Checkbox("##Frozen", &value.frozen);
+                ImGui::SameLine();
+                if (ImGui::Button("Copy")) {
+                    ImGui::SetClipboardText(std::format("0x{:08x}", value.value_address).c_str());
+                }
+                ImGui::SameLine();
+
+                ImGui::BeginDisabled(!value.frozen && false);
+
+                std::visit([&]<typename T0>(T0&& arg) {
+                    using T = std::decay_t<T0>;
+
+                    if constexpr (std::is_same_v<T, BEType<uint32_t>>) {
+                        uint32_t val = std::get<BEType<uint32_t>>(value.value).getLE();
+                        if (ImGui::DragScalar(value.value_name.c_str(), ImGuiDataType_U32, &val)) {
+                            std::get<BEType<uint32_t>>(value.value) = val;
+                        }
+                    }
+                    else if constexpr (std::is_same_v<T, BEType<int32_t>>) {
+                        int32_t val = std::get<BEType<int32_t>>(value.value).getLE();
+                        if (ImGui::DragScalar(value.value_name.c_str(), ImGuiDataType_S32, &val)) {
+                            std::get<BEType<int32_t>>(value.value) = val;
+                        }
+                    }
+                    else if constexpr (std::is_same_v<T, BEType<float>>) {
+                        float val = std::get<BEType<float>>(value.value).getLE();
+                        if (ImGui::DragScalar(value.value_name.c_str(), ImGuiDataType_Float, &val)) {
+                            std::get<BEType<float>>(value.value) = val;
+                        }
+                    }
+                    else if constexpr (std::is_same_v<T, BEType<uint8_t>>) {
+                        uint8_t val = std::get<BEType<uint8_t>>(value.value).getLE();
+                        if (ImGui::DragScalar(value.value_name.c_str(), ImGuiDataType_U8, &val)) {
+                            std::get<BEType<uint8_t>>(value.value) = val;
+                        }
+                    }
+                    else if constexpr (std::is_same_v<T, BEType<uint16_t>>) {
+                        uint16_t val = std::get<BEType<uint16_t>>(value.value).getLE();
+                        if (ImGui::DragScalar(value.value_name.c_str(), ImGuiDataType_U16, &val)) {
+                            std::get<BEType<uint16_t>>(value.value) = val;
+                        }
+                    }
+                    else if constexpr (std::is_same_v<T, BEVec3>) {
+                        float xyz[3] = { std::get<BEVec3>(value.value).x.getLE(), std::get<BEVec3>(value.value).y.getLE(), std::get<BEVec3>(value.value).z.getLE() };
+                        if (ImGui::DragFloat3(value.value_name.c_str(), xyz)) {
+                            std::get<BEVec3>(value.value).x = xyz[0];
+                            std::get<BEVec3>(value.value).y = xyz[1];
+                            std::get<BEVec3>(value.value).z = xyz[2];
+                        }
+                    }
+                    else if constexpr (std::is_same_v<T, BEMatrix34>) {
+                        if (value.expanded) {
+                            auto mtx = std::get<BEMatrix34>(value.value).getLE();
+                            ImGui::Indent(); bool row0Changed = ImGui::DragFloat4("Row 0", mtx[0].data(), 10.0f, 0, 0, nullptr, ImGuiSliderFlags_NoRoundToFormat); ImGui::Unindent();
+                            ImGui::Indent(); bool row1Changed = ImGui::DragFloat4("Row 1", mtx[1].data(), 10.0f, 0, 0, nullptr, ImGuiSliderFlags_NoRoundToFormat); ImGui::Unindent();
+                            ImGui::Indent(); bool row2Changed = ImGui::DragFloat4("Row 2", mtx[2].data(), 10.0f, 0, 0, nullptr, ImGuiSliderFlags_NoRoundToFormat); ImGui::Unindent();
+                            if (row0Changed || row1Changed || row2Changed) {
+                                std::get<BEMatrix34>(value.value).setLE(mtx);
+                            }
+                        }
+                        else {
+                            float xyz[3] = { std::get<BEMatrix34>(value.value).pos_x.getLE(), std::get<BEMatrix34>(value.value).pos_y.getLE(), std::get<BEMatrix34>(value.value).pos_z.getLE() };
+                            if (ImGui::DragFloat3(value.value_name.c_str(), xyz)) {
+                                std::get<BEMatrix34>(value.value).pos_x = xyz[0];
+                                std::get<BEMatrix34>(value.value).pos_y = xyz[1];
+                                std::get<BEMatrix34>(value.value).pos_z = xyz[2];
+                            }
+                        }
+
+                        // allow matrix to be expandable to show more
+                        ImGui::SameLine();
+                        if (ImGui::Button("...")) {
+                            value.expanded = !value.expanded;
+                        }
+                    }
+                    else if constexpr (std::is_same_v<T, MemoryRange>) {
+                        if (ImGui::Button(std::format("{} '{}' memory at {:08X}", value.expanded ? "Close" : "Open", value.value_name, value.value_address).c_str())) {
+                            value.expanded = !value.expanded;
+                        }
+                        if (value.expanded) {
+                            auto& mem_edit = std::get<MemoryRange>(value.value).editor;
+                            uint32_t data = std::get<MemoryRange>(value.value).start;
+                            uint32_t size = std::get<MemoryRange>(value.value).end - std::get<MemoryRange>(value.value).start;
+                            std::string windowName = std::format("{} at {:08X} with size of {:08X}", value.value_name, value.value_address, size);
+                            mem_edit->DrawWindow(windowName.c_str(), (ImU8*)CemuHooks::GetMemoryBaseAddress()+(size_t)data, size, 0x0);
+                        }
+                    }
+                    else if constexpr (std::is_same_v<T, std::string>) {
+                        std::string val = std::get<std::string>(value.value);
+                        ImGui::Text( val.c_str());
+                    }
+                }, value.value);
+
+                ImGui::EndDisabled();
+
+                ImGui::PopID();
+            }
+
+            ImGui::PopID();
+        }
+    }
+    ImGui::EndChild();
+    ImGui::End();
+}
 
 void RND_Vulkan::ImGuiOverlay::AddOrUpdateEntity(uint32_t actorId, const std::string& entityName, const std::string& valueName, uint32_t address, ValueVariant&& value, bool isEntity) {
     const auto& [entityIt, _] = m_entities.try_emplace(actorId, Entity{ entityName, isEntity, 0.0f, {}, {}, {}, {} });
@@ -795,11 +745,4 @@ void RND_Vulkan::ImGuiOverlay::RemoveEntityValue(uint32_t actorId, const std::st
         }).begin(), it->second.values.end());
     }
 }
-
-void RND_Vulkan::ImGuiOverlay::SetInGameFrustum(OpenXR::EyeSide side, glm::fvec3 position, glm::fquat rotation, XrFovf fov) {
-    this->m_inGameFrustums[side] = { position, rotation, fov };
-}
-
-void RND_Vulkan::ImGuiOverlay::SetVRFrustum(OpenXR::EyeSide side, glm::fvec3 from, XrPosef pose, XrFovf fov) {
-    this->m_vrFrustums[side] = { from, pose, fov };
-}
+#endif
