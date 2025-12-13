@@ -107,6 +107,7 @@ private:
 
     static void hook_UseCameraDistance(PPCInterpreter_t* hCPU);
     static void hook_ReplaceCameraMode(PPCInterpreter_t* hCPU);
+    static void hook_OverwriteCameraParam(PPCInterpreter_t* hCPU);
 
     // First-Person Model Hooks
     static void hook_SetActorOpacity(PPCInterpreter_t* hCPU);
