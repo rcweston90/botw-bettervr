@@ -99,6 +99,10 @@ void VkDeviceOverrides::CmdClearColorImage(const vkroots::VkDeviceDispatch* pDis
                 lockImageResolutions.unlock();
             }
 
+            if (CemuHooks::UseBlackBarsDuringEvents()) {
+                return;
+            }
+
             if (image != s_curr3DColorImage) {
                 Log::print<RENDERING>("Color image is not the same as the current 3D color image! ({} != {})", (void*)image, (void*)s_curr3DColorImage);
                 const_cast<VkClearColorValue*>(pColor)[0] = { 0.0f, 0.0f, 0.0f, 0.0f };

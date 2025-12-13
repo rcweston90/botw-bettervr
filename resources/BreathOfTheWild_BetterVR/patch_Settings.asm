@@ -3,7 +3,6 @@ moduleMatches = 0x6267BFD0
 
 .origin = codecave
 
-
 data_settingsOffset:
 CameraModeSetting:
 .int $cameraMode
@@ -28,6 +27,12 @@ EnableDebugOverlaySetting:
 
 BuggyAngularVelocitySetting:
 .int $buggyAngularVelocity
+
+CutsceneCameraMode:
+.int $cutsceneCameraMode
+
+CutsceneBlackBars:
+.int $cutsceneBlackBars
 
 
 
@@ -61,7 +66,11 @@ stw r8, 0x08(r1)
 
 lis r5, data_settingsOffset@ha
 addi r5, r5, data_settingsOffset@l
+lis r6, data_TableOfCutsceneEventsSettings@ha
+addi r6, r6, data_TableOfCutsceneEventsSettings@l
 bl import.coreinit.hook_UpdateSettings
+lwz r5, 0x14(r1)
+lwz r6, 0x10(r1)
 
 ; get event and entrypoint strings
 lis r3, EventMgr__sInstance@ha

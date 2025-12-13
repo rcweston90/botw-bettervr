@@ -84,7 +84,7 @@ void CemuHooks::hook_ChangeWeaponMtx(PPCInterpreter_t* hCPU) {
     hCPU->gpr[9] = 0; // this is used to indicate whether the weapon was modified
     hCPU->gpr[11] = 0; // this is used to drop the weapon if the grip button is pressed
 
-    if (GetSettings().IsThirdPersonMode()) {
+    if (IsThirdPerson()) {
         return;
     }
 
@@ -105,7 +105,7 @@ void CemuHooks::hook_ChangeWeaponMtx(PPCInterpreter_t* hCPU) {
     glm::fvec3 cameraAt = camera.at.getLE();
     glm::fquat lookAtQuat = glm::quatLookAtRH(glm::normalize(cameraAt - cameraPos), { 0.0, 1.0, 0.0 });
     glm::fvec3 lookAtPos = cameraPos;
-    lookAtPos.y += GetSettings().playerHeightSetting.getLE();
+    //lookAtPos.y += GetSettings().playerHeightSetting.getLE();
 
     // read bone name
     if (boneNamePtr == 0)
@@ -194,7 +194,7 @@ void CemuHooks::hook_CreateNewScreen(PPCInterpreter_t* hCPU) {
 void CemuHooks::hook_DropEquipment(PPCInterpreter_t* hCPU) {
     hCPU->instructionPointer = hCPU->sprNew.LR;
 
-    if (GetSettings().IsThirdPersonMode()) {
+    if (IsThirdPerson() || HasActiveCutscene()) {
         return;
     }
 
@@ -290,7 +290,7 @@ void CemuHooks::hook_EnableWeaponAttackSensor(PPCInterpreter_t* hCPU) {
 void CemuHooks::hook_SetPlayerWeaponScale(PPCInterpreter_t* hCPU) {
     hCPU->instructionPointer = hCPU->sprNew.LR;
 
-    if (GetSettings().IsThirdPersonMode()) {
+    if (IsThirdPerson()) {
         return;
     }
 
@@ -386,6 +386,10 @@ void CemuHooks::DrawDebugOverlays() {
 
 void CemuHooks::hook_ModifyBoneMatrix(PPCInterpreter_t* hCPU) {
     hCPU->instructionPointer = hCPU->sprNew.LR;
+
+    if (IsThirdPerson()) {
+        return;
+    }
 
     uint32_t gsysModelPtr = hCPU->gpr[3];
     uint32_t matrixPtr = hCPU->gpr[4];

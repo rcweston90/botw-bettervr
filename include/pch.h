@@ -496,6 +496,20 @@ struct data_VRSettingsIn {
     AngularVelocityFixerMode AngularVelocityFixer_GetMode() {
         return (AngularVelocityFixerMode)buggyAngularVelocity.getLE();
     }
+
+    std::string ToString() const {
+        std::string buffer = "";
+        std::format_to(std::back_inserter(buffer), " - Camera Mode: {}\n", IsFirstPersonMode() ? "First Person" : "Third Person");
+        std::format_to(std::back_inserter(buffer), " - Left Handed: {}\n", IsLeftHanded() ? "Yes" : "No");
+        std::format_to(std::back_inserter(buffer), " - GUI Follow Setting: {}\n", UIFollowsLookingDirection() ? "Follow Looking Direction" : "Fixed");
+        std::format_to(std::back_inserter(buffer), " - Player Height: {} meters\n", playerHeightSetting.getLE());
+        std::format_to(std::back_inserter(buffer), " - 2D VR View Enabled: {}\n", Is2DVRViewEnabled() ? "Yes" : "No");
+        std::format_to(std::back_inserter(buffer), " - Crop Flat to 16:9: {}\n", ShouldFlatPreviewBeCroppedTo16x9() ? "Yes" : "No");
+        std::format_to(std::back_inserter(buffer), " - Debug Overlay: {}\n", ShowDebugOverlay() ? "Enabled" : "Disabled");
+        std::format_to(std::back_inserter(buffer), " - Cutscene Camera Mode: {}\n", GetCutsceneCameraMode() == EventMode::ALWAYS_FIRST_PERSON ? "Always First Person" : (GetCutsceneCameraMode() == EventMode::ALWAYS_THIRD_PERSON ? "Always Third Person" : "Follow Default Event Settings"));
+        std::format_to(std::back_inserter(buffer), " - Show Black Bars for Third-Person Cutscenes: {}\n", UseBlackBarsForCutscenes() ? "Yes" : "No");
+        return buffer;
+    }
 };
 
 

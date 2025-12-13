@@ -36,6 +36,7 @@ public:
 
         osLib_registerHLEFunction("coreinit", "hook_UseCameraDistance", &hook_UseCameraDistance);
         osLib_registerHLEFunction("coreinit", "hook_ReplaceCameraMode", &hook_ReplaceCameraMode);
+        osLib_registerHLEFunction("coreinit", "hook_GetEventName", &hook_GetEventName);
         osLib_registerHLEFunction("coreinit", "hook_OverwriteCameraParam", &hook_OverwriteCameraParam);
 
         // First-Person Model Hooks
@@ -58,7 +59,6 @@ public:
         // Logging/Debugging Hooks
         osLib_registerHLEFunction("coreinit", "hook_OSReportToConsole", &hook_OSReportToConsole);
         osLib_registerHLEFunction("coreinit", "hook_DropWeaponLogging", &hook_DropWeaponLogging);
-        osLib_registerHLEFunction("coreinit", "hook_GetEventName", &hook_GetEventName);
         osLib_registerHLEFunction("coreinit", "hook_ModifyHandModelAccessSearch", &hook_ModifyHandModelAccessSearch);
         osLib_registerHLEFunction("coreinit", "hook_CreateNewScreen", &hook_CreateNewScreen);
     };
@@ -67,8 +67,7 @@ public:
     };
 
     static data_VRSettingsIn GetSettings();
-    static uint32_t GetFramesSinceLastCameraUpdate() { return s_framesSinceLastCameraUpdate.load(); }
-    static uint64_t GetMemoryBaseAddress() { return s_memoryBaseAddress; }
+    static uint64_t GetMemoryBaseAddress() { return s_memoryBaseAddress; }    
 
     std::unique_ptr<class EntityDebugger> m_entityDebugger;
     static std::array<class WeaponMotionAnalyser, 2> m_motionAnalyzers;
@@ -78,6 +77,96 @@ public:
     static uint32_t s_cameraMtxAddress;
     static glm::fvec3 s_playerPos;
     static glm::mat4 s_lastCameraMtx;
+
+    // If the user is unable to control the camera, we can guess that they're in a cutscene
+    struct HybridEventSettings {
+        bool firstPerson;                  // use Link's perspective, ignore the animated event camera
+        bool disablePlayerDrivenLinkHands; // let event control the hands instead of the VR controllers
+        bool ignoreCameraRotation;         // some events will pan the camera, but in first-person it should usually be ignored to avoid nausea. Doors opening is okay, but panning down to a chest is not.
+        bool demoEnableCameraInput;        // there's already events that allow user camera control. This isn't used or overwritten atm.
+    };
+
+    static uint32_t GetFramesSinceLastCameraUpdate() { return s_framesSinceLastCameraUpdate.load(); }
+    static bool IsInGame() {
+        // todo: check if 3 frames is the right threshold
+        return GetFramesSinceLastCameraUpdate() <= 4;
+    }
+
+    static std::string s_currentEvent;
+    static HybridEventSettings s_currentEventSettings;
+    static std::unordered_map<std::string, HybridEventSettings> s_eventSettings;
+    static void initCutsceneDefaultSettings(uint32_t ppc_TableOfCutsceneEventsSettingsOffset);
+
+    static bool HasActiveCutscene() {
+        return !s_currentEvent.empty();
+    }
+
+    static EventMode GetEventModeWithOverride() {
+        if (!HasActiveCutscene()) {
+            return EventMode::NO_EVENT;
+        }
+
+        EventMode mode = GetSettings().GetCutsceneCameraMode();
+        // todo: check if user has overriden the cutscene mode during active cutscenes
+
+        // if the camera is controllable, treat it as no event
+        // todo: Apparently this is a bad way to check it.
+        if (IsInGame()) {
+            //Log::print<VERBOSE>("Camera is controllable during cutscene '{}' due to frames since last camera update being {}. Treating as no event.", s_currentEvent, GetFramesSinceLastCameraUpdate());
+            //return EventMode::NO_EVENT;
+        }
+        return mode;
+    }
+
+    static std::optional<HybridEventSettings> GetFirstPersonSettingsForActiveEvent() {
+        auto mode = GetEventModeWithOverride();
+
+        if (mode == EventMode::NO_EVENT) {
+            return std::nullopt;
+        }
+        if (mode == EventMode::ALWAYS_THIRD_PERSON) {
+            return std::nullopt;
+        }
+        // resolve settings if in hybrid mode
+        if (mode == EventMode::FOLLOW_DEFAULT_EVENT_SETTINGS) {
+            //if (!s_currentEventSettings.firstPerson) {
+            //    return std::nullopt;
+            //}
+        }
+
+        return s_currentEventSettings;
+    }
+
+    static bool IsFirstPerson() {
+        if (auto settings = GetFirstPersonSettingsForActiveEvent(); settings.has_value()) {
+            // there's an active event
+            auto mode = GetEventModeWithOverride();
+            if (mode == EventMode::FOLLOW_DEFAULT_EVENT_SETTINGS && !settings->firstPerson) {
+                return false;
+            }
+            // cutscene with first-person settings
+            return true;
+        }
+        else {
+            // no event. Check if gameplay is in first-person mode
+            if (GetSettings().IsFirstPersonMode()) {
+                return true;
+            }
+            return false;
+        }
+    }
+
+    static bool IsThirdPerson() {
+        return !IsFirstPerson();
+    }
+
+    static bool UseBlackBarsDuringEvents() {
+        if (!HasActiveCutscene() || IsFirstPerson()) {
+            return false;
+        }
+
+        return GetSettings().UseBlackBarsForCutscenes();
+    }
 
     static void DrawDebugOverlays();
 
@@ -107,6 +196,7 @@ private:
 
     static void hook_UseCameraDistance(PPCInterpreter_t* hCPU);
     static void hook_ReplaceCameraMode(PPCInterpreter_t* hCPU);
+    static void hook_GetEventName(PPCInterpreter_t* hCPU);
     static void hook_OverwriteCameraParam(PPCInterpreter_t* hCPU);
 
     // First-Person Model Hooks
@@ -129,7 +219,6 @@ private:
     // Logging/Debugging Hooks
     static void hook_OSReportToConsole(PPCInterpreter_t* hCPU);
     static void hook_DropWeaponLogging(PPCInterpreter_t* hCPU);
-    static void hook_GetEventName(PPCInterpreter_t* hCPU);
     static void hook_ModifyHandModelAccessSearch(PPCInterpreter_t* hCPU);
     static void hook_CreateNewScreen(PPCInterpreter_t* hCPU);
 

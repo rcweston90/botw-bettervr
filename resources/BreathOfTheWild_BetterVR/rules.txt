@@ -19,9 +19,11 @@ $enableDebugOverlay:int = 0
 $leftHanded:int = 0
 $buggyAngularVelocity:int = 0 # Whether the angular velocity is wrongly provided in local space. Possible Values: 0 is auto; 1 is forced on; 2 is forced off
 
+$cutsceneCameraMode:int = 1
+$cutsceneBlackBars:int = 1
+
 
 # Camera Mode
-
 [Preset]
 name = Third-Person Camera (Most Stable & Casual, Seated Recommended)
 category = Camera Mode
@@ -36,7 +38,6 @@ $cameraMode = 1
 
 
 # Motion & Gamepad Controls
-
 [Preset]
 name = Use VR Motion Controls & Wii U Gamepad Input (Recommended)
 category = Motion & Gamepad Controls
@@ -52,7 +53,6 @@ $allowGamepadInput:int = 0
 
 
 # Left Or Right Handed
-
 [Preset]
 name = Left-Handed Weapon (Shield On Right Hand)
 category = Left Or Right Handed
@@ -65,6 +65,41 @@ category = Left Or Right Handed
 condition = $cameraMode == 1
 default = 1
 $leftHanded:int = 0
+
+
+# Cutscene Settings
+[Preset]
+name = Watch All Cutscenes From Link's Perspective (For Testing, Not Recommended)
+category = Cutscene Camera Mode
+condition = $cameraMode == 1
+$cutsceneCameraMode:int = 1
+
+[Preset]
+name = Use Optimal Cutscene Settings, Mix Of Both (Recommended)
+category = Cutscene Camera Mode
+condition = $cameraMode == 1
+default = 1
+$cutsceneCameraMode:int = 2
+
+[Preset]
+name = Watch All Cutscenes In Third Person Like Original Game (Less Immersive, Most Stable)
+category = Cutscene Camera Mode
+condition = $cameraMode == 1
+$cutsceneCameraMode:int = 3
+
+
+# Cutscene Black Bars
+# This is a user-configurable setting to add black boxes around a third-person cutscene, since those can be disorientating with floating, animated and non-FPS perspectives.
+[Preset]
+name = Use Black Bars During Third-Person Cutscenes (Recommended For Comfort)
+category = Cutscene Black Bars
+$cutsceneBlackBars:int = 1
+
+[Preset]
+name = Use Fullscreen During Third-Person Cutscenes (Recommended For Brave People, Lots Of Movement)
+category = Cutscene Black Bars
+default = 1
+$cutsceneBlackBars:int = 0
 
 
 # Enable 2D VR View

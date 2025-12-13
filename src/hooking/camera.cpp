@@ -25,7 +25,6 @@ void CemuHooks::hook_BeginCameraSide(PPCInterpreter_t* hCPU) {
 
 static std::pair<glm::quat, glm::quat> swingTwistY(const glm::quat& q) {
     glm::vec3 yAxis(0, 1, 0);
-    // Project rotation axis onto Y to get twist
     glm::vec3 r(q.x, q.y, q.z);
     float dot = glm::dot(r, yAxis);
     glm::vec3 proj = yAxis * dot;
@@ -36,6 +35,47 @@ static std::pair<glm::quat, glm::quat> swingTwistY(const glm::quat& q) {
 
 glm::fvec3 s_wsCameraPosition = glm::fvec3();
 glm::fquat s_wsCameraRotation = glm::identity<glm::fquat>();
+
+// 0x18000021 for carrying the electricity balls at least 
+// 0x00000010 for ladder
+// 0x00000012 for ladder transition
+// 0x18000002 for jumping
+// 0x00008002 for gliding
+// 0x00000090 for climbing
+enum class PlayerMoveBitFlags : uint32_t {
+    IS_MOVING = 1 << 0,
+    UNK_02 = 1 << 1,
+    UNK_004 = 1 << 2,
+    UNK_008 = 1 << 3,
+    UNK_016 = 1 << 4,
+    UNK_032 = 1 << 5,
+    UNK_064 = 1 << 6,
+    UNK_128 = 1 << 7,
+    UNK_256 = 1 << 8,
+    UNK_512 = 1 << 9,
+    UNK_1024 = 1 << 10,
+    UNK_2048 = 1 << 11,
+    UNK_4096 = 1 << 12,
+    UNK_8192 = 1 << 13,
+    UNK_16384 = 1 << 14,
+    UNK_32768 = 1 << 15,
+    UNK_65536 = 1 << 16,
+    UNK_131072 = 1 << 17,
+    UNK_262144 = 1 << 18,
+    UNK_524288 = 1 << 19,
+    UNK_1048576 = 1 << 20,
+    UNK_2097152 = 1 << 21,
+    UNK_4194304 = 1 << 22,
+    UNK_8388608 = 1 << 23,
+    UNK_16777216 = 1 << 24,
+    UNK_33554432 = 1 << 25,
+    UNK_67108864 = 1 << 26,
+    UNK_134217728 = 1 << 27, // GETS DISABLED WHEN INSIDE A CUTSCENE
+    UNK_268435456 = 1 << 28,
+    UNK_536870912 = 1 << 29,
+    UNK_1073741824 = 1 << 30,
+    GET_HIT_MAYBE_UNABLE_TO_INTERACT = 1u << 31
+};
 
 void CemuHooks::hook_UpdateCameraForGameplay(PPCInterpreter_t* hCPU) {
     hCPU->instructionPointer = hCPU->sprNew.LR;
@@ -67,10 +107,17 @@ void CemuHooks::hook_UpdateCameraForGameplay(PPCInterpreter_t* hCPU) {
     s_wsCameraRotation = glm::quat_cast(glm::inverse(existingGameMtx));
 
     // rebase the rotation to the player position
-    if (GetSettings().IsFirstPersonMode()) {
+    if (IsFirstPerson()) {
         BEMatrix34 mtx = {};
         readMemory(s_playerMtxAddress, &mtx);
         glm::fvec3 playerPos = mtx.getPos().getLE();
+
+        if (auto settings = GetFirstPersonSettingsForActiveEvent()) {
+            if (settings->ignoreCameraRotation) {
+                glm::fquat playerRot = mtx.getRotLE();
+                s_wsCameraRotation = playerRot * glm::angleAxis(glm::radians(180.0f), glm::fvec3(0.0f, 1.0f, 0.0f));
+            }
+        }
 
         glm::mat4 playerMtx4 = glm::inverse(glm::translate(glm::identity<glm::mat4>(), playerPos) * glm::mat4(s_wsCameraRotation));
         existingGameMtx = playerMtx4;
@@ -147,13 +194,17 @@ void CemuHooks::hook_GetRenderCamera(PPCInterpreter_t* hCPU) {
     glm::fvec3 eyePos = ToGLM(currPoseOpt.value().position);
     glm::fquat eyeRot = ToGLM(currPoseOpt.value().orientation);
 
-    if (GetSettings().IsFirstPersonMode()) {
+    if (IsFirstPerson()) {
         basePos = playerPos;
+        if (auto settings = GetFirstPersonSettingsForActiveEvent()) {
+            if (settings->ignoreCameraRotation) {
+                baseYaw = playerRot * glm::angleAxis(glm::radians(180.0f), glm::fvec3(0.0f, 1.0f, 0.0f));
+            }
+        }
     }
 
     glm::vec3 newPos = basePos + (baseYaw * eyePos);
     glm::fquat newRot = baseYaw * eyeRot;
-
 
     glm::mat4 newWorldVR = glm::translate(glm::mat4(1.0f), newPos) * glm::mat4_cast(newRot);
     glm::mat4 newViewVR = glm::inverse(newWorldVR);
@@ -363,17 +414,19 @@ void CemuHooks::hook_ReplaceCameraMode(PPCInterpreter_t* hCPU) {
 
     if (hCPU->gpr[5] == kCameraChaseVtbl) {
         //Log::print("Current camera mode: {:#X}, tail mode: {:#X}, vtbl: {:#X}", currentCameraMode, cameraTailMode, currentCameraVtbl);
-        if (GetSettings().IsFirstPersonMode()) {
+        if (IsFirstPerson()) {
             // overwrite to tail mode
             //hCPU->gpr[3] = cameraTailMode;
         }
     }
+
+    //Log::print<VERBOSE>("Camera mode: {:#X}, tail mode: {:#X}, vtbl: {:#X}", currentCameraMode, cameraTailMode, currentCameraVtbl);
 }
 
 void CemuHooks::hook_UseCameraDistance(PPCInterpreter_t* hCPU) {
     hCPU->instructionPointer = hCPU->sprNew.LR;
 
-    if (GetSettings().IsFirstPersonMode()) {
+    if (IsFirstPerson()) {
         hCPU->fpr[13].fp0 = 0.0f;
     }
     else {
@@ -402,9 +455,72 @@ void CemuHooks::hook_CalculateModelOpacity(PPCInterpreter_t* hCPU) {
     hCPU->instructionPointer = hCPU->sprNew.LR;
     
     // overwrites return value to 1 if in first person mode
-    if (GetSettings().IsFirstPersonMode()) {
+    if (IsFirstPerson()) {
         hCPU->fpr[1].fp0 = 1.0f;
     }
+}
+
+std::string CemuHooks::s_currentEvent = {};
+CemuHooks::HybridEventSettings CemuHooks::s_currentEventSettings = {};
+std::unordered_map<std::string, CemuHooks::HybridEventSettings> CemuHooks::s_eventSettings = {};
+
+constexpr CemuHooks::HybridEventSettings defaultFirstPersonSettings = {
+    .firstPerson = true,
+    .disablePlayerDrivenLinkHands = false,
+    .ignoreCameraRotation = true
+};
+
+void CemuHooks::initCutsceneDefaultSettings(uint32_t ppc_TableOfCutsceneEventsSettingsOffset) {
+    if (!s_eventSettings.empty()) {
+        return;
+    }
+
+    char* currPtr = reinterpret_cast<char*>(s_memoryBaseAddress + ppc_TableOfCutsceneEventsSettingsOffset);
+    while (true) {
+        const std::string line(currPtr);
+        if (line.empty()) {
+            break;
+        }
+        size_t commaPos = line.find(',');
+        if (commaPos != std::string::npos) {
+            HybridEventSettings entry = {};
+            std::string settingsStr = line.substr(commaPos + 1);
+            std::string eventName = line.substr(0, commaPos);
+            size_t pos = 0;
+            while ((pos = settingsStr.find(',')) != std::string::npos) {
+                std::string setting = settingsStr.substr(0, pos);
+                if (setting == "FP_ON") entry.firstPerson = true;
+                else if (setting == "FP_OFF") entry.firstPerson = false;
+                else if (setting == "HND_ON") entry.disablePlayerDrivenLinkHands = false;
+                else if (setting == "HND_OFF") entry.disablePlayerDrivenLinkHands = true;
+                else if (setting == "PAN_ON") entry.ignoreCameraRotation = false;
+                else if (setting == "PAN_OFF") entry.ignoreCameraRotation = true;
+                else if (setting == "CTRL_ON") entry.demoEnableCameraInput = false;
+                else if (setting == "CTRL_OFF") entry.demoEnableCameraInput = true;
+                else {
+                    Log::print<WARNING>("Unknown cutscene default setting: {}", setting);
+                }
+                settingsStr.erase(0, pos + 1);
+            }
+            // last setting
+            std::string setting = settingsStr;
+            if (setting == "FP_ON") entry.firstPerson = true;
+            else if (setting == "FP_OFF") entry.firstPerson = false;
+            else if (setting == "HND_ON") entry.disablePlayerDrivenLinkHands = false;
+            else if (setting == "HND_OFF") entry.disablePlayerDrivenLinkHands = true;
+            else if (setting == "PAN_ON") entry.ignoreCameraRotation = false;
+            else if (setting == "PAN_OFF") entry.ignoreCameraRotation = true;
+            else if (setting == "CTRL_ON") entry.demoEnableCameraInput = false;
+            else if (setting == "CTRL_OFF") entry.demoEnableCameraInput = true;
+            else {
+                Log::print<WARNING>("Unknown cutscene default setting: {}", setting);
+            }
+            s_eventSettings.insert_or_assign(eventName, entry);
+        }
+        currPtr += line.length() + 1;
+    }
+
+    Log::print<VERBOSE>("Initialized cutscene default settings for {} events.", s_eventSettings.size());
 }
 
 void CemuHooks::hook_GetEventName(PPCInterpreter_t* hCPU) {
@@ -412,14 +528,37 @@ void CemuHooks::hook_GetEventName(PPCInterpreter_t* hCPU) {
 
     uint32_t isEventActive = hCPU->gpr[3];
     if (isEventActive) {
-        uint32_t stringPtr = getMemory<uint32_t>(hCPU->gpr[4]).getLE();
         const char* eventNamePtr = (const char*)(hCPU->gpr[4] + s_memoryBaseAddress);
-        Log::print<RENDERING>("Event name {} from {:08X}", eventNamePtr, hCPU->gpr[4]);
+        std::string eventName = std::string(eventNamePtr);
+        if (s_currentEvent == eventName) {
+            return;
+        }
+        Log::print<INFO>("Event '{}' is now active.", eventName);
+        s_currentEvent = eventName;
+
+        auto it = s_eventSettings.find(eventName);
+        if (it != s_eventSettings.end()) {
+            HybridEventSettings settings = it->second;
+            Log::print<VERBOSE>(" - First Person: {}", settings.firstPerson ? "ON" : "OFF");
+            Log::print<VERBOSE>(" - Ignore Camera Rotation: {}", settings.ignoreCameraRotation ? "ON" : "OFF");
+            Log::print<VERBOSE>(" - Disable Player-Driven Link Hands: {}", settings.disablePlayerDrivenLinkHands ? "ON" : "OFF");
+            s_currentEventSettings = settings;
+        }
+        else {
+            Log::print<VERBOSE>(" - No specific settings found for this event, using defaults.");
+            s_currentEventSettings = defaultFirstPersonSettings;
+        }
+
+        // In cutscene's there's somethings a mention of Demo_EnableCameraInput/Demo_EnableCameraControlByUser/Demo_DisableCameraInput
+        // These don't actually seem to be hooked up. There is a flag called 
+
+        // IF THERE'S AN EVENT + Link's camera controls are disabled, we should check the type of event and then disable the camera accordingly to the categorized type
         // shrine going down is Demo008_2
         // camera zoom when opening door is Demo024_0
     }
-    else {
+    else if (!s_currentEvent.empty()) {
         //Log::print("!! There's no active event");
+        s_currentEvent = "";
     }
 }
 

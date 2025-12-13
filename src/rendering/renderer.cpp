@@ -31,17 +31,13 @@ void RND_Renderer::StartFrame() {
     this->UpdateViews(m_frameState.predictedDisplayTime);
 
     // todo: update this as late as possible
-    // VRManager::instance().XR->UpdateSpaces(m_frameState.predictedDisplayTime);
+    //VRManager::instance().XR->UpdateSpaces(m_frameState.predictedDisplayTime);
 
-    // todo: I'm not sure if these actions should be separated like we do with the XrViews
+    // todo: should we really not update actions if the camera is middle pose is not available?
     auto headsetRotation = VRManager::instance().XR->GetRenderer()->GetMiddlePose();
     if (headsetRotation.has_value()) {
-        //Log::print<CONTROLS>("Updating actions while being in the {} state", VRManager::instance().Hooks->GetFramesSinceLastCameraUpdate() >= 3 ? "menu" : "in-game");
-        // todo: check if 3 frames is the right threshold
         // todo: update this as late as possible
-        VRManager::instance().XR->UpdateActions(m_frameState.predictedDisplayTime, headsetRotation.value(), VRManager::instance().Hooks->GetFramesSinceLastCameraUpdate() >= 3);
-        // currently we only support non-AER presenting, aka we render two textures with the same pose and then we present them
-        // m_layer3D->UpdatePoses(m_frameState.predictedDisplayTime);
+        VRManager::instance().XR->UpdateActions(m_frameState.predictedDisplayTime, headsetRotation.value(), !VRManager::instance().Hooks->IsInGame());
     }
 }
 

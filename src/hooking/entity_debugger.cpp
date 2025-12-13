@@ -172,6 +172,9 @@ void EntityDebugger::UpdateEntityMemory() {
 
         if (actorName.starts_with("GameROMPlayer")) {
             addMemoryRange("ActorWeapons", actorPtr + offsetof(PlayerOrEnemy, weapons), 0x68);
+
+            //uint32_t hexFlags = CemuHooks::getMemory<BEType<uint32_t>>(actorPtr + 0x8DC).getLE();
+            //Log::print<VERBOSE>("CanUseCamera = {:08X}", hexFlags);
         }
 
         BEMatrix34 mtx = CemuHooks::getMemory<BEMatrix34>(actorPtr + offsetof(ActorWiiU, mtx));

@@ -187,7 +187,8 @@ void CemuHooks::hook_InjectXRInput(PPCInterpreter_t* hCPU) {
     // camera/fast-scroll stick
     XrActionStateVector2f& rightStickSource = inputs.inGame.in_game ? inputs.inGame.camera : inputs.inMenu.scroll;
 
-    if (GetSettings().IsFirstPersonMode() && inputs.inGame.in_game) {
+    // disable up-and-down tilting
+    if (IsFirstPerson() && inputs.inGame.in_game) {
         rightStickSource.currentState.y = 0;
     }
 
