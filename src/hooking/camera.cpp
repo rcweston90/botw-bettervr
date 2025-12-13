@@ -115,7 +115,7 @@ void CemuHooks::hook_UpdateCameraForGameplay(PPCInterpreter_t* hCPU) {
         if (auto settings = GetFirstPersonSettingsForActiveEvent()) {
             if (settings->ignoreCameraRotation) {
                 glm::fquat playerRot = mtx.getRotLE();
-                s_wsCameraRotation = playerRot * glm::angleAxis(glm::radians(180.0f), glm::fvec3(0.0f, 1.0f, 0.0f));
+                s_wsCameraRotation = playerRot; // * glm::angleAxis(glm::radians(180.0f), glm::fvec3(0.0f, 1.0f, 0.0f));
             }
         }
 
@@ -280,6 +280,10 @@ static glm::mat4 calculateProjectionMatrix(float nearZ, float farZ, const XrFovf
 void CemuHooks::hook_GetRenderProjection(PPCInterpreter_t* hCPU) {
     hCPU->instructionPointer = hCPU->sprNew.LR;
 
+    if (CemuHooks::UseBlackBarsDuringEvents()) {
+        return;
+    }
+
     uint32_t projectionIn = hCPU->gpr[3];
     uint32_t projectionOut = hCPU->gpr[12];
     OpenXR::EyeSide side = hCPU->gpr[0] == 0 ? OpenXR::EyeSide::LEFT : OpenXR::EyeSide::RIGHT;
@@ -335,6 +339,10 @@ void CemuHooks::hook_GetRenderProjection(PPCInterpreter_t* hCPU) {
 
 void CemuHooks::hook_ModifyLightPrePassProjectionMatrix(PPCInterpreter_t* hCPU) {
     hCPU->instructionPointer = hCPU->sprNew.LR;
+
+    if (CemuHooks::UseBlackBarsDuringEvents()) {
+        return;
+    }
 
     uint32_t projectionIn = hCPU->gpr[3];
     OpenXR::EyeSide side = hCPU->gpr[11] == 0 ? OpenXR::EyeSide::LEFT : OpenXR::EyeSide::RIGHT;
