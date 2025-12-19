@@ -71,13 +71,14 @@ target_sources(BetterVR_Layer PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hooking/cemu_hooks.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hooking/camera.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hooking/settings.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/hooking/hands.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/hooking/hands.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/hooking/weapon.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/hooking/weapon.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hooking/controls.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hooking/entity_debugger.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hooking/entity_debugger.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hooking/rumble.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/hooking/rumble.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/hooking/skeleton.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/rendering/d3d12.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/rendering/d3d12.h
     ${CMAKE_CURRENT_SOURCE_DIR}/src/rendering/renderer.cpp

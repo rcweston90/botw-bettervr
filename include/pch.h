@@ -68,6 +68,7 @@ using Microsoft::WRL::ComPtr;
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/norm.hpp>
 #include <glm/gtx/string_cast.hpp>
+#include <glm/gtx/euler_angles.hpp>
 #undef GLM_ENABLE_EXPERIMENTAL
 
 inline glm::fvec2 ToGLM(const XrVector2f& vec) {

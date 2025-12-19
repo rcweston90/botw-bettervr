@@ -19,7 +19,9 @@ struct DebugSample {
     glm::fvec3 linearVelocity;
     glm::fvec3 angularVelocity;
 
+
     AttackType debug_attackType;
+    bool debug_expVelocityLengthEnabled;
 
     glm::fvec3 rotLinearAccel;
 
@@ -76,6 +78,8 @@ public:
     static constexpr int BAD_SAMPLES_BUFFER = 1;
     static constexpr std::chrono::nanoseconds GOOD_SAMPLES_BEFORE_GOOD_STAB = std::chrono::milliseconds(4);
 
+    static constexpr float HAND_VELOCITY_LENGTH_THRESHOLD = 2.0f;
+
     static constexpr float dist_threshold = 0.6f; // max distance from head to consider attack
     XrTime COOLDOWN_TIME = int(1e9*2.0f); // 0.5 s in nano seconds
 
@@ -94,6 +98,7 @@ public:
 
     glm::fvec3 prev_AngularVelocity = glm::fvec3();
 
+    bool handVelocityToggled = false;
     float handVelocityLength = 0.0f;
 
     void Update(const XrSpaceLocation& handLocation, const XrSpaceVelocity& handVelocity, const glm::fmat4& headsetMtx, const XrTime inputTime) {
@@ -107,7 +112,9 @@ public:
         const glm::fvec3 headsetPostion = glm::fvec3(headsetMtx[3]);
         const glm::fquat headsetRotation = glm::quat_cast(headsetMtx); // Angular rotation vector
 
+        // new variant of attack detection based on velocity threshold
         handVelocityLength = glm::length(linearVelocity);
+        handVelocityToggled = handVelocityLength >= HAND_VELOCITY_LENGTH_THRESHOLD;
 
         m_rollingSamples[m_rollingSamplesIt] = {
             .time = inputTime,
@@ -115,7 +122,8 @@ public:
             .rotation = rotation,
             .linearVelocity = linearVelocity,
             .angularVelocity = angularVelocity, // angular velocity in world space
-            .debug_attackType = AttackType::None
+            .debug_attackType = AttackType::None,
+            .debug_expVelocityLengthEnabled = handVelocityToggled
         };
         m_lastSampleIdx = m_rollingSamplesIt;
         m_rollingSamplesIt = (m_rollingSamplesIt + 1) % MAX_SAMPLES;
@@ -143,7 +151,6 @@ public:
         float angular_drift = acos(glm::dot(glm::normalize(angularVelocity), glm::normalize(prev_AngularVelocity)))/dt; // Angular velocity drift (defined as the angular velocity of the rotating angular velocity i.e. how much rad/s the orthogonal vector of rotation moves)
 
         m_rollingSamples[m_lastSampleIdx].rotLinearAccel = localLinearAcceleration;
-
 
 
 
@@ -491,7 +498,7 @@ public:
         ImGui::SameLine();
 
         {
-            std::array<float, MAX_SAMPLES> t{}, avX{}, avY{}, avZ{}, maskSlash{}, maskStab{};
+            std::array<float, MAX_SAMPLES> t{}, avX{}, avY{}, avZ{}, maskSlash{}, maskStab{}, velLengthTriggered{};
             for (uint32_t j = 0; j < MAX_SAMPLES; ++j) {
                 const auto& s = m_rollingSamples[oldestIdx(j)];
                 t[j] = static_cast<float>(j);
@@ -500,6 +507,7 @@ public:
                 avZ[j] = s.rotatedAngularVelocity().z;
                 maskSlash[j] = (s.debug_attackType == AttackType::Slash) ? 100.0f : -100.0f;
                 maskStab[j] = (s.debug_attackType == AttackType::Stab) ? 100.0f : -100.0f;
+                velLengthTriggered[j] = s.debug_expVelocityLengthEnabled ? 100.0f : -100.0f;
             }
 
             if (ImPlot::BeginPlot("Weapon Steadiness", { 0, 300 }, ImPlotFlags_NoTitle)) {
@@ -511,6 +519,8 @@ public:
                 ImPlot::PlotShaded("Slash", t.data(), maskSlash.data(), MAX_SAMPLES, -100.0f);
                 ImPlot::SetNextLineStyle(ImVec4(1, 0.5f, 0, 0.3f), 3);
                 ImPlot::PlotShaded("Stab", t.data(), maskStab.data(), MAX_SAMPLES, -100.0f);
+                ImPlot::SetNextLineStyle(ImVec4(0, 0, 0.8f, 0.3f), 3);
+                ImPlot::PlotShaded("VelLengthEnabled", t.data(), velLengthTriggered.data(), MAX_SAMPLES, -100.0f);
 
                 ImPlot::SetNextLineStyle(ImVec4(0, 1, 0.5f, 0.5f), 2);
                 ImPlot::PlotLine("X", t.data(), avX.data(), MAX_SAMPLES);
@@ -531,9 +541,6 @@ public:
                 avddX[j] = s.rotLinearAccel.x;
                 avY[j] = s.rotatedLinearVelocity().y;
                 avZ[j] = s.rotatedLinearVelocity().z;
-                
-
-
                 maskSlash[j] = (s.debug_attackType == AttackType::Slash) ? 100.0f : -100.0f;
                 maskStab[j] = (s.debug_attackType == AttackType::Stab) ? 100.0f : -100.0f;
             }

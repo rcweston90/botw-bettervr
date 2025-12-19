@@ -1,6 +1,6 @@
 #include "instance.h"
 #include "cemu_hooks.h"
-#include "hands.h"
+#include "weapon.h"
 
 
 std::array<WeaponMotionAnalyser, 2> CemuHooks::m_motionAnalyzers = {};
@@ -331,13 +331,13 @@ void CemuHooks::hook_EnableWeaponAttackSensor(PPCInterpreter_t* hCPU) {
         writeMemory(weaponPtr, &weapon);
     }
 
-    //rumbles
-    float handVelocity = m_motionAnalyzers[heldIndex].handVelocityLength;
-    Log::print<INFO>("velocity lenght : {}", handVelocity);
-    if (handVelocity >= 2.0f)
-    {
-        handVelocity -= 2.0f;
-        VRManager::instance().XR->GetRumbleManager()->startSimpleRumble(0.1, 0.5f * handVelocity, 0.7f * handVelocity);
+    // rumbles
+    if (m_motionAnalyzers[heldIndex].IsAttacking()) {
+        float rumbleVelocity = m_motionAnalyzers[heldIndex].handVelocityLength - WeaponMotionAnalyser::HAND_VELOCITY_LENGTH_THRESHOLD;
+        if (rumbleVelocity <= 0.0f) {
+            rumbleVelocity = 0.0f;
+        }
+        VRManager::instance().XR->GetRumbleManager()->startSimpleRumble(0.1f, 0.5f * rumbleVelocity, 0.7f * rumbleVelocity);
     }
 }
 
@@ -436,204 +436,4 @@ void CemuHooks::DrawDebugOverlays() {
         }
     }
     ImGui::End();
-}
-
-
-
-void CemuHooks::hook_ModifyBoneMatrix(PPCInterpreter_t* hCPU) {
-    hCPU->instructionPointer = hCPU->sprNew.LR;
-
-    if (IsThirdPerson()) {
-        return;
-    }
-
-    uint32_t gsysModelPtr = hCPU->gpr[3];
-    uint32_t matrixPtr = hCPU->gpr[4];
-    uint32_t scalePtr = hCPU->gpr[5];
-    uint32_t boneNamePtr = hCPU->gpr[6];
-    uint32_t boneIdx = hCPU->gpr[27];
-
-    if (gsysModelPtr == 0 || matrixPtr == 0 || scalePtr == 0 || boneNamePtr == 0) {
-        //Log::print<INFO>("Bone name couldn't be found for bone #{} for model {}", boneIdx, modelName.getLE());
-        return;
-    }
-
-    // todo: check if Link's armor is filtered out due to this check
-    sead::FixedSafeString100 modelName = getMemory<sead::FixedSafeString100>(gsysModelPtr + 0x128);
-    if (modelName.getLE() != "GameROMPlayer") {
-        return;
-    }
-
-    // extract bone info
-    glm::fmat4x3 matrixNew = getMemory<BEMatrix34>(matrixPtr).getLEMatrix();
-    glm::fvec3 bonePos = matrixNew[3];
-    glm::fquat boneRot = glm::quat_cast(glm::mat3(matrixNew));
-    glm::fvec3 boneScale = getMemory<BEVec3>(scalePtr).getLE();
-
-    char* boneNamePtrChar = (char*)(s_memoryBaseAddress + boneNamePtr);
-    std::string_view boneName(boneNamePtrChar);
-
-    bool leftOrRightSide = boneName.ends_with("_L");
-
-    OpenXR::EyeSide side = leftOrRightSide ? OpenXR::EyeSide::LEFT : OpenXR::EyeSide::RIGHT;
-    OpenXR::InputState inputs = VRManager::instance().XR->m_input.load();
-
-    glm::fvec3 controllerPos = glm::fvec3(0.0f);
-    glm::fquat controllerQuat = glm::identity<glm::fquat>();
-    glm::fvec3 relativeControllerPos = glm::fvec3(0.0f);
-    glm::fquat relativeControllerQuat = glm::identity<glm::fquat>();
-    if (inputs.inGame.in_game && inputs.inGame.pose[side].isActive) {
-        auto& handPose = inputs.inGame.poseLocation[side];
-
-        if (handPose.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) {
-            controllerPos = ToGLM(handPose.pose.position);
-        }
-        if (handPose.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) {
-            controllerQuat = ToGLM(handPose.pose.orientation);
-        }
-
-        auto& relativeHandPose = inputs.inGame.hmdRelativePoseLocation[side];
-
-        if (handPose.locationFlags & XR_SPACE_LOCATION_POSITION_VALID_BIT) {
-            relativeControllerPos = ToGLM(relativeHandPose.pose.position);
-        }
-        if (handPose.locationFlags & XR_SPACE_LOCATION_ORIENTATION_VALID_BIT) {
-            relativeControllerQuat = ToGLM(relativeHandPose.pose.orientation);
-        }
-    }
-
-    if (boneName == "Root") {
-        bonePos = glm::fvec3();
-        boneRot = glm::identity<glm::fquat>();
-    }
-    else if (boneName == "Skl_Root") {
-        bonePos = glm::fvec3();
-        boneRot = glm::identity<glm::fquat>();
-    }
-    else if (boneName.starts_with("Spine_1")) {
-        bonePos = glm::fvec3();
-        boneRot = glm::identity<glm::fquat>();
-    }
-    else if (boneName.starts_with("Spine_2")) {
-        bonePos = glm::fvec3();
-        boneRot = glm::identity<glm::fquat>();
-    }
-    else if (boneName == "Neck") {
-        bonePos = glm::fvec3();
-        boneRot = glm::identity<glm::fquat>();
-    }
-    else if (boneName == "Head") {
-        bonePos = glm::fvec3();
-        boneRot = glm::identity<glm::fquat>();
-    }
-    else if (boneName.starts_with("Clavicle_Assist")) {
-        bonePos = glm::fvec3();
-        boneRot = glm::identity<glm::fquat>();
-    }
-    else if (boneName.starts_with("Clavicle")) {
-        bonePos = glm::fvec3();
-        boneRot = glm::identity<glm::fquat>();
-    }
-    else if (boneName.starts_with("Arm_1_Assist")) {
-        bonePos = glm::fvec3();
-        boneRot = glm::identity<glm::fquat>();
-    }
-    else if (boneName.starts_with("Arm_1")) {
-        bonePos = glm::fvec3();
-        boneRot = glm::identity<glm::fquat>();
-    }
-    else if (boneName.starts_with("Elbow")) {
-        bonePos = glm::fvec3();
-        boneRot = glm::identity<glm::fquat>();
-    }
-    else if (boneName.starts_with("Wrist_Assist")) {
-        bonePos = glm::fvec3();
-        boneRot = glm::identity<glm::fquat>();
-    }
-    else if (boneName.starts_with("Arm_2")) {
-        bonePos = glm::fvec3();
-        boneRot = glm::identity<glm::fquat>();
-    }
-    else if (boneName.starts_with("Wrist")) {
-        boneRot = glm::identity<glm::fquat>();
-        bonePos = glm::fvec3();
-
-        // player model orientation in world space
-        BEMatrix34 bePlayerMtx = getMemory<BEMatrix34>(s_playerMtxAddress);
-        glm::mat4x3 playerMtx = bePlayerMtx.getLEMatrix();
-        glm::mat4 playerMtx4 = glm::mat4(playerMtx);
-        glm::mat4 playerPos = glm::translate(glm::identity<glm::fmat4>(), glm::fvec3(playerMtx[3]));
-        glm::mat4 playerRot = glm::mat4_cast(glm::quat_cast(playerMtx4));
-
-        BEMatrix34 mtx = {};
-        readMemory(s_playerMtxAddress, &mtx);
-
-        glm::fquat handCorrectionQuat = glm::identity<glm::fquat>();
-        // todo: what's the correct hand holding offset here? angle between grip and pointing pose?
-        if (leftOrRightSide) {
-            handCorrectionQuat *= glm::angleAxis(glm::radians(90.0f), glm::fvec3(0, 1, 0));
-            handCorrectionQuat *= glm::angleAxis(glm::radians(-90.0f), glm::fvec3(0, 0, 1));
-            handCorrectionQuat *= glm::angleAxis(glm::radians(-45.0f), glm::fvec3(1, 0, 0));
-            handCorrectionQuat *= glm::angleAxis(glm::radians(45.0f), glm::fvec3(1, 0, 0));
-        }
-        else {
-            handCorrectionQuat *= glm::angleAxis(glm::radians(-90.0f), glm::fvec3(0, 0, 1));
-            handCorrectionQuat *= glm::angleAxis(glm::radians(-180.0f), glm::fvec3(0, 1, 0));
-            handCorrectionQuat *= glm::angleAxis(glm::radians(270.0f), glm::fvec3(1, 0, 0));
-        }
-        // slightly tweak it to align better to VR pose
-        handCorrectionQuat *= glm::angleAxis(glm::radians(20.0f), glm::fvec3(0, 0, 1));
-
-        glm::fmat4 handCorrections = glm::mat4_cast(handCorrectionQuat);
-
-
-        // calculate the inverse offset from the Weapon_L/Weapon_R bones, since the XR pose is meant to be at that position, and this function only is able to access the parent wrist bone
-        // Weapon_L: 0.10690f 0.00002f 0.02769f, rotation = euler(1.57080f, 0.0f, 3.14159f)
-        // Weapon_R: -0,10690 -0,00002 -0,02769, rotation = euler(1.57080f, 0.0f, 0.0f)
-        // todo: double-check rotation of VR controller in hands before release; quick check
-        glm::fvec3 weaponPositionOffset = leftOrRightSide ? glm::fvec3(0.10690f, 0.00002f, 0.02769f) : glm::fvec3(-0.10690, -0.00002, -0.02769f);
-        glm::fvec3 weaponRotationOffset = leftOrRightSide ? glm::fvec3(1.57080f, 0.0f, 3.14159f) : glm::fvec3(1.57080f, 0.0f, 0.0f);
-        weaponPositionOffset *= -1.0f;
-        glm::fmat4 weaponOffsetMtx = glm::translate(glm::identity<glm::fmat4>(), weaponPositionOffset); // * glm::toMat4(glm::quat(weaponRotationOffset));
-
-        // turn the controller pose into a matrix
-        glm::fmat4 vrTransformationMatrix = glm::translate(glm::identity<glm::fmat4>(), controllerPos);
-        glm::fmat4 vrRotationMatrix = glm::mat4_cast(controllerQuat);
-        glm::fmat4 controllerInLocalSpace = vrTransformationMatrix * vrRotationMatrix * handCorrections;
-
-        // camera matrix from the game
-        // todo: this might cause the camera to be behind a frame, so find a better way to get the camera matrix
-        //BEMatrix34 beCameraMtx = {};
-        //readMemory(s_cameraMtxAddress, &mtx);
-        glm::mat4 cameraMtx = s_lastCameraMtx;
-        glm::mat4 cameraPositionOnlyMtx = glm::translate(glm::identity<glm::fmat4>(), glm::fvec3(cameraMtx[3]));
-        glm::fquat cameraQuat = glm::quat_cast(cameraMtx);
-        glm::mat4 cameraRotationOnlyMtx = glm::mat4_cast(cameraQuat);
-
-        // calculate the weapon matrix
-        glm::mat4 controllerInWorld = cameraRotationOnlyMtx * controllerInLocalSpace * weaponOffsetMtx;
-
-        glm::fmat4 controllerRelativeToPlayerModel = playerPos * controllerInWorld;
-
-        glm::fmat4x3 truncatedFinalMtx = glm::mat4x3(glm::inverse(playerMtx4) * controllerRelativeToPlayerModel);
-
-        bonePos = truncatedFinalMtx[3];
-        boneRot = glm::quat_cast(glm::mat3(truncatedFinalMtx));
-    }
-    else {
-        // not a (parent of the) wrist bone, do nothing 
-        return;
-    }
-
-    glm::mat3 rotMat = glm::mat3_cast(boneRot);
-    glm::mat4x3 finalMtx(
-        rotMat[0],
-        rotMat[1],
-        rotMat[2],
-        bonePos
-    );
-
-    BEMatrix34 finalMatrix;
-    finalMatrix.setLEMatrix(finalMtx);
-    writeMemory(matrixPtr, &finalMatrix);
 }
