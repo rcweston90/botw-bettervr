@@ -395,7 +395,7 @@ void CheckButtonState(XrActionStateBoolean& action, ButtonState& buttonState) {
     }
 
     // detect long, short and double presses
-    constexpr std::chrono::milliseconds longPressThreshold{ 400 };
+    constexpr std::chrono::milliseconds longPressThreshold{ 250 };
     constexpr std::chrono::milliseconds doublePressWindow{ 150 };
 
     const bool down = (action.currentState == XR_TRUE);

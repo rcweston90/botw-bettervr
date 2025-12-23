@@ -197,6 +197,7 @@ void CemuHooks::hook_InjectXRInput(PPCInterpreter_t* hCPU) {
         //newXRBtnHold |= mapXRButtonToVpad(inputs.inGame.cancel, VPAD_BUTTON_B);
         newXRBtnHold |= mapXRButtonToVpad(inputs.inGame.useRune, VPAD_BUTTON_L);
 
+        //run
         if (inputs.inGame.runState.lastEvent == ButtonState::Event::LongPress) {
             newXRBtnHold |= VPAD_BUTTON_B;
         }
@@ -235,6 +236,8 @@ void CemuHooks::hook_InjectXRInput(PPCInterpreter_t* hCPU) {
                     if (leftJoystickDir != JoyDir::None) {
                         gameState.prevent_grab_inputs = true;
                         gameState.prevent_grab_time = now;
+                        //prevent movement while dpad is used
+                        leftStickSource.currentState = { 0.0f, 0.0f };
                     }
                 }
             }
@@ -284,7 +287,6 @@ void CemuHooks::hook_InjectXRInput(PPCInterpreter_t* hCPU) {
     else {
         if (!gameState.prevent_menu_inputs)
         {
-            //Log::print<INFO>("map open : {}", inputs.inMenu.map_open);
             if (gameState.map_open)
                 newXRBtnHold |= mapXRButtonToVpad(inputs.inMenu.mapAndInventory, VPAD_BUTTON_MINUS);
             else
@@ -295,13 +297,10 @@ void CemuHooks::hook_InjectXRInput(PPCInterpreter_t* hCPU) {
         else if (!inputs.inMenu.mapAndInventory.currentState)
             gameState.prevent_menu_inputs = false;
 
-       /* newXRBtnHold |= mapXRButtonToVpad(inputs.inMenu.mapAndInventory, VPAD_BUTTON_MINUS);*/
-
         newXRBtnHold |= mapXRButtonToVpad(inputs.inMenu.select, VPAD_BUTTON_A);
         newXRBtnHold |= mapXRButtonToVpad(inputs.inMenu.back, VPAD_BUTTON_B);
         newXRBtnHold |= mapXRButtonToVpad(inputs.inMenu.sort, VPAD_BUTTON_Y);
         newXRBtnHold |= mapXRButtonToVpad(inputs.inMenu.hold, VPAD_BUTTON_X);
-
         newXRBtnHold |= mapXRButtonToVpad(inputs.inMenu.leftTrigger, VPAD_BUTTON_L);
         newXRBtnHold |= mapXRButtonToVpad(inputs.inMenu.rightTrigger, VPAD_BUTTON_R);
 
@@ -365,11 +364,6 @@ void CemuHooks::hook_InjectXRInput(PPCInterpreter_t* hCPU) {
         newXRStickHold |= VPAD_STICK_L_EMULATION_DOWN;
     else if (leftStickSource.currentState.y >= AXIS_THRESHOLD || (HAS_FLAG(oldXRStickHold, VPAD_STICK_L_EMULATION_UP) && leftStickSource.currentState.y >= HOLD_THRESHOLD))
         newXRStickHold |= VPAD_STICK_L_EMULATION_UP;
-
-    // disable up-and-down tilting
-    if (IsFirstPerson() && inputs.inGame.in_game) {
-        rightStickSource.currentState.y = 0;
-    }
 
     vpadStatus.rightStick = {rightStickSource.currentState.x + vpadStatus.rightStick.x.getLE(), rightStickSource.currentState.y + vpadStatus.rightStick.y.getLE()};
 
