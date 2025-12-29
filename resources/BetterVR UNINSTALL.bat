@@ -35,17 +35,22 @@ if exist "%CEMU_DIR%\portable\" (
 call :Log "Mode: %MODE%"
 call :Log "Primary target base: %TARGET_BASE%"
 
-set "REMOVED=0"
-call :RemoveIfExists "%TARGET_BASE%\%PACK_NAME%"
+set "DEST_BACK=%CEMU_DIR%\%PACK_NAME%"
+set "STATUS=0"
+call :MoveBackIfExists "%TARGET_BASE%\%PACK_NAME%"
 
 rem Also clean up other known locations if the pack exists there (helps if user moved between portable/non-portable)
-call :RemoveIfExists "%CEMU_DIR%\portable\graphicPacks\%PACK_NAME%"
-call :RemoveIfExists "%CEMU_DIR%\graphicPacks\%PACK_NAME%"
-call :RemoveIfExists "%APPDATA%\Cemu\graphicPacks\%PACK_NAME%"
+call :MoveBackIfExists "%CEMU_DIR%\portable\graphicPacks\%PACK_NAME%"
+call :MoveBackIfExists "%CEMU_DIR%\graphicPacks\%PACK_NAME%"
+call :MoveBackIfExists "%APPDATA%\Cemu\graphicPacks\%PACK_NAME%"
 
-if "%REMOVED%"=="1" (
-  call :Log "INFO: Uninstall complete."
-  call :Popup "BreathOfTheWild_BetterVR graphic pack removed." "BetterVR Uninstaller"
+if "%STATUS%"=="1" (
+  call :Log "INFO: Uninstall complete (moved back)."
+  call :Popup "BreathOfTheWild_BetterVR moved back to Cemu folder." "BetterVR Uninstaller"
+  exit /b 0
+) else if "%STATUS%"=="2" (
+  call :Log "INFO: Uninstall complete (removed old version)."
+  call :Popup "Old BreathOfTheWild_BetterVR removed. (A folder with that name already exists next to Cemu, so we kept it.)" "BetterVR Uninstaller"
   exit /b 0
 ) else (
   call :Log "WARN: Pack not found in any known graphicPacks location."
@@ -54,16 +59,34 @@ if "%REMOVED%"=="1" (
 )
 
 
-:RemoveIfExists
-set "P=%~1"
-if exist "%P%\" (
-  call :Log "INFO: Removing: %P%"
-  rmdir /s /q "%P%" 2>nul
-  if exist "%P%\" (
-    call :Log "ERROR: Failed to remove: %P%"
+:MoveBackIfExists
+set "SRC=%~1"
+if exist "%SRC%\" (
+  if not "!STATUS!"=="0" (
+    call :Log "INFO: Found duplicate at '%SRC%', deleting."
+    rmdir /s /q "%SRC%" 2>nul
   ) else (
-    set "REMOVED=1"
-    call :Log "INFO: Removed: %P%"
+    if exist "%DEST_BACK%\" (
+      call :Log "INFO: Destination '%DEST_BACK%' already exists. Assuming it is a new version. Deleting installed pack '%SRC%'."
+      rmdir /s /q "%SRC%" 2>nul
+      set "STATUS=2"
+    ) else (
+      call :Log "INFO: Moving '%SRC%' back to '%DEST_BACK%'"
+      move "%SRC%" "%DEST_BACK%" >nul 2>&1
+      if not errorlevel 1 (
+        set "STATUS=1"
+        call :Log "INFO: Move successful."
+      ) else (
+        call :Log "WARN: 'move' command failed. Trying robocopy /MOVE."
+        robocopy "%SRC%" "%DEST_BACK%" /E /MOVE /R:0 /W:0 /V >nul 2>&1
+        if not exist "%SRC%\" (
+          set "STATUS=1"
+          call :Log "INFO: Robocopy move successful."
+        ) else (
+          call :Log "ERROR: Failed to move pack back."
+        )
+      )
+    )
   )
 )
 exit /b
