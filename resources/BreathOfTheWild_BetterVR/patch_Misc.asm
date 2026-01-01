@@ -3,6 +3,13 @@ moduleMatches = 0x6267BFD0
 
 .origin = codecave
 
+; forces StartShiekSensorGaugeDemo to instantly finish and not get softlocked (which happens when you unlock a tower)
+; this disables the gauge animation where it would get stuck in
+; not ideal but better than softlocking
+0x023F90E0 = nop
+0x023F90E4 = nop
+0x023F90EC = nop
+0x023F910C = nop
 
 ; ==================================================================================
 ; make jump always jump twice as high to compensate for increased player gravity due to bug
